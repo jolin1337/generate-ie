@@ -1,0 +1,276 @@
+{
+  "pos": [
+    {
+      "key": "!",
+      "value": "."
+    },
+    {
+      "key": "#",
+      "value": "."
+    },
+    {
+      "key": "$",
+      "value": "."
+    },
+    {
+      "key": "''",
+      "value": "."
+    },
+    {
+      "key": "(",
+      "value": "."
+    },
+    {
+      "key": ")",
+      "value": "."
+    },
+    {
+      "key": ",",
+      "value": "."
+    },
+    {
+      "key": "-LRB-",
+      "value": "."
+    },
+    {
+      "key": "-RRB-",
+      "value": "."
+    },
+    {
+      "key": ".",
+      "value": "."
+    },
+    {
+      "key": ":",
+      "value": "."
+    },
+    {
+      "key": "?",
+      "value": "."
+    },
+    {
+      "key": "``",
+      "value": "."
+    },
+    {
+      "key": "JJ",
+      "value": "Adjective"
+    },
+    {
+      "key": "JJR",
+      "value": "Adjective"
+    },
+    {
+      "key": "JJRJR",
+      "value": "Adjective"
+    },
+    {
+      "key": "JJS",
+      "value": "Adjective"
+    },
+    {
+      "key": "JJ|RB",
+      "value": "Adjective"
+    },
+    {
+      "key": "JJ|VBG",
+      "value": "Adjective"
+    },
+    {
+      "key": "RB",
+      "value": "Adverb"
+    },
+    {
+      "key": "RBR",
+      "value": "Adverb"
+    },
+    {
+      "key": "RBS",
+      "value": "Adverb"
+    },
+    {
+      "key": "RB|RP",
+      "value": "Adverb"
+    },
+    {
+      "key": "RB|VBG",
+      "value": "Adverb"
+    },
+    {
+      "key": "WRB",
+      "value": "Adverb"
+    },
+    {
+      "key": "CC",
+      "value": "Conjunction"
+    },
+    {
+      "key": "DT",
+      "value": "Determiner"
+    },
+    {
+      "key": "EX",
+      "value": "Determiner"
+    },
+    {
+      "key": "PDT",
+      "value": "Determiner"
+    },
+    {
+      "key": "WDT",
+      "value": "Determiner"
+    },
+    {
+      "key": "NN",
+      "value": "Noun"
+    },
+    {
+      "key": "NNP",
+      "value": "Noun"
+    },
+    {
+      "key": "NNPS",
+      "value": "Noun"
+    },
+    {
+      "key": "NNS",
+      "value": "Noun"
+    },
+    {
+      "key": "NN|NNS",
+      "value": "Noun"
+    },
+    {
+      "key": "NN|SYM",
+      "value": "Noun"
+    },
+    {
+      "key": "NN|VBG",
+      "value": "Noun"
+    },
+    {
+      "key": "NP",
+      "value": "Noun"
+    },
+    {
+      "key": "CD",
+      "value": "Number"
+    },
+    {
+      "key": "IN",
+      "value": "Preposition"
+    },
+    {
+      "key": "IN|RP",
+      "value": "Preposition"
+    },
+    {
+      "key": "PRP",
+      "value": "Pronoun"
+    },
+    {
+      "key": "PRP$",
+      "value": "Pronoun"
+    },
+    {
+      "key": "PRP|VBP",
+      "value": "Pronoun"
+    },
+    {
+      "key": "WP",
+      "value": "Pronoun"
+    },
+    {
+      "key": "WP$",
+      "value": "Pronoun"
+    },
+    {
+      "key": "POS",
+      "value": "PRT"
+    },
+    {
+      "key": "PRT",
+      "value": "PRT"
+    },
+    {
+      "key": "RP",
+      "value": "PRT"
+    },
+    {
+      "key": "TO",
+      "value": "PRT"
+    },
+    {
+      "key": "MD",
+      "value": "Verb"
+    },
+    {
+      "key": "VB",
+      "value": "Verb"
+    },
+    {
+      "key": "VBD",
+      "value": "Verb"
+    },
+    {
+      "key": "VBD|VBN",
+      "value": "Verb"
+    },
+    {
+      "key": "VBG",
+      "value": "Verb"
+    },
+    {
+      "key": "VBG|NN",
+      "value": "Verb"
+    },
+    {
+      "key": "VBN",
+      "value": "Verb"
+    },
+    {
+      "key": "VBP",
+      "value": "Verb"
+    },
+    {
+      "key": "VBP|TO",
+      "value": "Verb"
+    },
+    {
+      "key": "VBZ",
+      "value": "Verb"
+    },
+    {
+      "key": "VP",
+      "value": "Verb"
+    },
+    {
+      "key": "CD|RB",
+      "value": "X"
+    },
+    {
+      "key": "FW",
+      "value": "X"
+    },
+    {
+      "key": "LS",
+      "value": "X"
+    },
+    {
+      "key": "RN",
+      "value": "X"
+    },
+    {
+      "key": "SYM",
+      "value": "X"
+    },
+    {
+      "key": "UH",
+      "value": "X"
+    },
+    {
+      "key": "WH",
+      "value": "X"
+    }
+  ]
+}
