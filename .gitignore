@@ -7,3 +7,6 @@ data/
 wiki-word2vec/
 corenlp-swedish-depparse-model/
 results/
+stanford-corenlp-full*
+stanford-corenlp-src/
+stopwords.txt

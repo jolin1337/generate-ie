@@ -2,67 +2,60 @@
 section=${1:-all}
 
 trainGensim () {
-	echo "Training Gensim word2vec model"
-	git clone https://github.com/klintan/wiki-word2vec
-	cd wiki-word2vec
+    echo "Training Gensim word2vec model"
+    git clone https://github.com/klintan/wiki-word2vec
+    cd wiki-word2vec
 
-	pyenv local 3.6.4
-	pip install gensim
-	#make LANGUAGE=sv
+    pyenv local 3.6.4
+    pip install gensim
+    make LANGUAGE=sv
+    cd -
 }
 
-
-cleanConllFiles () {
-conllFile=$1
-	python -c "
-with open('$conllFile', 'r') as inp:
-	with open('$conllFile.clean', 'w') as out:
-		for line in inp:
-			if not line.startswith('#'):
-				out.write(line + '\\n')
-"
-}
 
 trainDependencyParser () {
-	echo "Training dependency parser"
-	git clone https://github.com/klintan/corenlp-swedish-depparse-model
-	cd corenlp-swedish-depparse-model
-    cleanConllFiles ../data/sv_talbanken-ud-train.conllu
-	cleanConllFiles ../data/sv_talbanken-ud-dev.conllu
-	cleanConllFiles ../data/sv_talbanken-ud-test.conllu
-	tail -n +2 ../wiki-word2vec/data/sv/model_sv.word2vec.model.txt > model_sv.word2vec.model.txt
-	java -mx16g -cp "../stanford-corenlp-full-2018-10-05/*" \
-         edu.stanford.nlp.parser.nndep.DependencyParser \
-         -trainFile ../data/sv_talbanken-ud-train.conllu.clean \
-         -devFile ../data/sv_talbanken-ud-dev.conllu.clean \
-         -embedFile	model_sv.word2vec.model.txt \
-         -embeddingSize 400 \
-         -model swe-dependency-model.txt.gz
+    echo "Clone swedish depparse model repo"
+    git clone https://github.com/klintan/corenlp-swedish-depparse-model
+    cd corenlp-swedish-depparse-model
+    STANFORD_VERSION="stanford-corenlp-full-2018-10-05"
+    if [ -d "$STANFORD_VERSION" ]; then
+	echo "Skipping download of $STANFORD_VERSION, since it already exists"
+    else
+	echo "Downloading $STANFORD_VERSION"
+	wget -O $STANFORD_VERSION.zip http://nlp.stanford.edu/software/$STANFORD_VERSION.zip
+	unzip $STANFORD_VERSION.zip -d ./
+    fi
 
-	echo "Removing invalid embedding tokens"
-	gunzip -c swe-dependency-model.txt.gz | \
-       sed -e 's/ ([^0-9\\-])/\1.\2/g' | \
-      gzip -c > swe-dependency-model.txt.gz
+    echo "Download Part of speech tagger"
+    wget -O swedish.tagger https://raw.githubusercontent.com/klintan/corenlp-swedish-pos-model/master/swedish.tagger
 
-	java -mx16g -cp "../stanford-corenlp-full-2018-10-05/*" \
-		edu.stanford.nlp.parser.nndep.DependencyParser \
-		-model swe-dependency-model.txt.gz
-		-testFile ../data/sv_talbanken-ud-test.conllu.clean
+    echo "Download conllu dataset for dependency parsing"
+    [ ! -f ../data/sv_talbanken-ud-train.conllu ] && wget -O ../data/sv_talbanken-ud-train.conllu https://raw.githubusercontent.com/UniversalDependencies/UD_Swedish-Talbanken/master/sv_talbanken-ud-train.conllu
+    [ ! -f ../data/sv_talbanken-ud-test.conllu ] && wget -O ../data/sv_talbanken-ud-test.conllu https://raw.githubusercontent.com/UniversalDependencies/UD_Swedish-Talbanken/master/sv_talbanken-ud-test.conllu
+    [ ! -f ../data/sv_talbanken-ud-dev.conllu ] && wget -O ../data/sv_talbanken-ud-dev.conllu https://raw.githubusercontent.com/UniversalDependencies/UD_Swedish-Talbanken/master/sv_talbanken-ud-dev.conllu
+    [ ! -f ../data/sv_lines-ud-train.conllu ] && wget -O ../data/sv_lines-ud-train.conllu https://raw.githubusercontent.com/UniversalDependencies/UD_Swedish-LinES/master/sv_lines-ud-train.conllu
+    [ ! -f ../data/sv_lines-ud-test.conllu ] && wget -O ../data/sv_lines-ud-test.conllu https://raw.githubusercontent.com/UniversalDependencies/UD_Swedish-LinES/master/sv_lines-ud-test.conllu
+    [ ! -f ../data/sv_lines-ud-dev.conllu ] && wget -O ../data/sv_lines-ud-dev.conllu https://raw.githubusercontent.com/UniversalDependencies/UD_Swedish-LinES/master/sv_lines-ud-dev.conllu
+    [ ! -f ../data/sv_pud-ud-train.conllu ] && wget -O ../data/sv_pud-ud-train.conllu https://raw.githubusercontent.com/UniversalDependencies/UD_Swedish-PUD/master/sv_pud-ud-test.conllu
+    tail -n +2 ../wiki-word2vec/data/sv/model_sv.word2vec.model.txt > model_sv.word2vec.model.txt
+    echo "Train dependency parser"
+    ../trainDependencyParser.sh $STANFORD_VERSION model_sv.word2vec.model.txt
+    cd -
 }
 
 
 case $section in
-	"all")
-		trainGensim
-		trainDependencyParser
-		;;
-	"gensim")
-		trainGensim
-		;;
-	"dependencyParser")
-		trainDependencyParser
-		;;
-	*)
-		echo "Unkown model \"$section\""
-		;;
+    "all")
+        trainGensim
+        trainDependencyParser
+        ;;
+    "gensim")
+        trainGensim
+        ;;
+    "dependencyParser")
+        trainDependencyParser
+        ;;
+    *)
+        echo "Unkown model \"$section\""
+        ;;
 esac

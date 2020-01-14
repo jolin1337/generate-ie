@@ -1,5 +1,5 @@
 {
-  "pos": [
+  "eng_pos": [
     {
       "key": "!",
       "value": "."
@@ -271,6 +271,92 @@
     {
       "key": "WH",
       "value": "X"
+    }
+  ],
+  "swe_pos": [
+    {
+      "key": "HS",
+      "value": "Pronoun"
+    },
+    {
+      "key": "PS",
+      "value": "Pronoun"
+    },
+    {
+      "key": "VB",
+      "value": "Verb"
+    },
+    {
+      "key": "IE",
+      "value": "Infinitive marker"
+    },
+    {
+      "key": "PP",
+      "value": "Preposition"
+    },
+    {
+      "key": "PN",
+      "value": "Pronoun"
+    },
+    {
+      "key": "NN",
+      "value": "Noun"
+    },
+    {
+      "key": "DT",
+      "value": "Determiner"
+    },
+    {
+      "key": "KN",
+      "value": "Conjunction"
+    },
+    {
+      "key": "RG",
+      "value": "Number"
+    },
+    {
+      "key": "SN",
+      "value": "Conjunction"
+    },
+    {
+      "key": "HD",
+      "value": "Determiner"
+    },
+    {
+      "key": "JJ",
+      "value": "Adjective"
+    },
+    {
+      "key": "HP",
+      "value": "Pronoun"
+    },
+    {
+      "key": "AB",
+      "value": "Adverb"
+    },
+    {
+      "key": "PM",
+      "value": "Noun"
+    },
+    {
+      "key": "RO",
+      "value": "Number"
+    },
+    {
+      "key": "IN",
+      "value": "Injection"
+    },
+    {
+      "key": "HA",
+      "value": "Adverb"
+    },
+    {
+      "key": "PC",
+      "value": "Adjective"
+    },
+    {
+      "key": "PL",
+      "value": "Verb"
     }
   ]
 }
