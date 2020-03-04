@@ -1,16 +1,15 @@
-from .parser import get_pos_tags
-from information_extraction.parser import split_relations
-
+from .part_of_speech import get_pos
+from .parser import split_relations
+from collections import defaultdict
 
 def add_entity(which_relations='all', **kwargs):
-    POS = get_pos_tags(kwargs.get('lang', 'swe'))
     relations = kwargs.get('relations')
     entity = kwargs.get('entity')
     parent = kwargs.get('parent', {})
     if parent.get('dep_rel') == 'punct':
         return
 
-    if POS.get(entity['pos'], None) in ['Noun', 'Adjective']:
+    if get_pos(entity['pos']) in ['Noun', 'Adjective']:
         OBJS.append(entity)
     for i, rel in enumerate(relations):
         if which_relations == 'all' or i in which_relations:
@@ -18,10 +17,9 @@ def add_entity(which_relations='all', **kwargs):
 
 
 def add_nsubj_entity(**kwargs):
-    POS = get_pos_tags(kwargs.get('lang', 'swe'))
     new_child = kwargs.get('entity')
     children = new_child['children']
-    if POS.get(new_child['pos'], None) in ['Noun', 'Adjective']:
+    if get_pos(new_child['pos']) in ['Noun', 'Adjective']:
         SUBJS.append(new_child)
     else:
         new_child = sorted(SUBJS, key=lambda s: s['token'] - new_child['token'])[-1] if SUBJS else None
@@ -33,10 +31,9 @@ def add_nsubj_entity(**kwargs):
 
 
 def add_expl_entity(**kwargs):
-    POS = get_pos_tags(kwargs.get('lang', 'swe'))
     new_child = kwargs.get('entity')
     children = new_child['children']
-    if POS.get(new_child['pos'], None) in ['Noun', 'Adjective']:
+    if get_pos(new_child['pos']) in ['Noun', 'Adjective']:
         OBJS.append(new_child)
     else:
         new_child = sorted(OBJS, key=lambda s: s['token'] - new_child['token'])[-1] if OBJS else None
@@ -87,7 +84,10 @@ prop_rules = [
     },
     {
         'conditions': {
-            'dep_rel': 'amod'
+            'dep_rel': 'amod',
+            'parent': {
+                'pos': 'Noun'
+            }
         },
         'actions': [{
             'method': propagate_entity,
@@ -501,7 +501,6 @@ def conditions(conds, **kwargs):
     is_true = True
     entity = kwargs.get('entity')
     parent = kwargs.get('parent')
-    POS = get_pos_tags(kwargs.get('lang'))
     if not isinstance(conds, list):
         conds = [conds]
     for condition in conds:
@@ -523,7 +522,7 @@ def conditions(conds, **kwargs):
                 kwargs_copy['entity'] = parent
                 is_true = is_true and conditions(value, **kwargs_copy)
             elif attr == 'pos':
-                is_true = is_true and (entity['pos'] == value or POS.get(entity['pos']) == value)
+                is_true = is_true and (entity['pos'] == value or get_pos(entity['pos']) == value)
             elif attr in entity:
                 is_true = is_true and entity[attr] == value
             else:
@@ -539,13 +538,12 @@ def do_actions(actions, **kwargs):
         action['method'](**action.get('params', {}), **kwargs)
 
 
-def handle_propagations(prop_entities, rel, child, lang):
-    POS = get_pos_tags(lang)
+def handle_propagations(prop_entities, rel, child):
     leftovers = []
     for entity in prop_entities[::-1]:
         entity['propagation_count'] -= 1
         if entity['propagation_count'] > 0:
-            if POS.get(child['pos']) != 'Verb':
+            if get_pos(child['pos']) != 'Verb':
                 leftovers.append(entity)
             continue
         if entity['type'] == 'entity' and entity['propagation_direction'] == 'right':
@@ -573,12 +571,14 @@ OBJS = []
 
 
 def is_relation(dep, pos):
-    POS = get_pos_tags('swe')
-    return POS.get(pos) == 'Verb' or dep[0] == 'parataxis'
+    return get_pos(pos) == 'Verb' or dep[0] == 'parataxis'
 
 def is_entity(dep, pos):
-    POS = get_pos_tags('swe')
-    return POS.get(pos) == 'Noun' or dep[0] == 'nsubj'
+    return get_pos(pos) == 'Noun' or \
+           dep[0] == 'nsubj' or \
+           (dep[0] == 'mark' and get_pos(pos) == 'Conjunction') or \
+           dep[0] == 'amod' or \
+           dep[0] == 'advmod'
 
 def is_parent(e1, parent, deps, pos):
     e1 = e1[1]
@@ -594,12 +594,15 @@ def is_parent(e1, parent, deps, pos):
 
 
 def get_sentence_relations(tree, pos_tags):
-    POS = get_pos_tags('swe')
     words, pos_tags = zip(*pos_tags)
     token_words = list(words)
     token_pos = list(pos_tags)
+    #subtract_with1 = min([dep[1] for dep in tree])
+    #subtract_with2 = min([dep[2] for dep in tree]) - 1
+    #tree = [[dep[0], dep[1] - subtract_with1, dep[2] - subtract_with2] for dep in tree]
     tree = sorted(tree, key=lambda dep: dep[2])
     disabled = []
+    token_conditions = defaultdict(list)
     for word, dep, pos in zip(token_words, tree, token_pos):
         kwargs = {
             'entity': {
@@ -607,34 +610,49 @@ def get_sentence_relations(tree, pos_tags):
                 'pos': pos
             },
             'parent': {
+                # -2 because it is the parent node
                 'dep_rel': tree[dep[1] - 1][0] if dep[1] > 0 else -1,
-                'pos': pos_tags[dep[1] - 1][1] if dep[1] > 0 else -1
-            },
-            'lang': 'swe'
+                'pos': token_pos[dep[1] - 1] if dep[1] > 0 else -1
+            }
         }
         for rule in prop_rules:
             if not isinstance(rule['actions'], list):
                 rule['actions'] = [rule['actions']]
             if not any(action['method'] == propagate_entity and action.get('params', {}).get('type') == 'concat' for action in rule['actions']):
                 continue
+            if word == 'full':
+                print("WWW", word, rule['conditions'], kwargs, dep[1], get_pos(kwargs['parent']['pos']))
             if conditions(rule['conditions'], **kwargs) and dep[1] > 0:
                 dep_entity = dep
+                rules = []
                 for action in rule['actions']:
                     if action['method'] != propagate_entity:
                         continue
                     for _ in range(action.get('params', {}).get('count', 1)):
-                        dep_entity = tree[dep_entity[1] - 1]
-                if dep_entity[2] < dep[2]:
-                    token_words[dep_entity[2] - 1] += ' ' + token_words[dep[2] - 1]
-                else:
-                    token_words[dep_entity[2] - 1] = token_words[dep[2] - 1] + ' ' + token_words[dep_entity[2] - 1]
-                if POS.get(token_pos[dep[2] - 1]) == 'Verb':
-                    token_pos[dep_entity[2] - 1] = token_pos[dep[2] - 1]
-                disabled.append(dep)
+                        if dep_entity[1] - 1 > 0:
+                            dep_entity = tree[dep_entity[1] - 1]
+                            rules.append(dep_entity)
+                if rules:
+                    rules.pop() # Remove the actual node
+                token_conditions[dep_entity[2] - 1].append({
+                    'rules': rules,
+                    'token': dep
+                })
+                if get_pos(token_pos[dep[2] - 1]) == 'Verb':
+                    tmp_dep = list(dep)
+                    tmp_dep_entity = list(dep_entity)
+                    tree[dep[2] - 1] = (tmp_dep_entity[0], tmp_dep_entity[1], tmp_dep[2])
+                    tree[dep_entity[2] - 1] = (tmp_dep[0], tmp_dep[1], tmp_dep_entity[2])
+                    for i in range(len(tree)):
+                        if tree[i][1] == tmp_dep_entity[2]: # If parent is the dependant
+                            tree[i] = (tree[i][0], tmp_dep[2], tree[i][2])
 
+                disabled.append(dep)
     relations = [(idx, dep) for idx, (dep, pos) in enumerate(zip(tree, token_pos)) if dep not in disabled and is_relation(dep, pos)]
     entities = [(idx, dep) for idx, (dep, pos) in enumerate(zip(tree, token_pos)) if dep not in disabled and is_entity(dep, pos)]
     triples = []
+    print("relations:",[token_words[r[0]] for r in relations])
+    print("entities:", [token_words[e[0]] for e in entities])
     for ridx, rel in relations:
         potential_entities = sorted(entities, key=lambda entity: abs(entity[0] - ridx))
         left_entities = []
@@ -650,13 +668,38 @@ def get_sentence_relations(tree, pos_tags):
                 left_entities.append((eidx, entity))
             if eidx > ridx:
                 right_entities.append((eidx, entity))
+        print(token_words[rel[2]-1], rel, left_entities, right_entities)
+        print(token_words)
+        print(token_pos)
+        print(tree)
         for reidx, re in right_entities:
             for leidx, le in left_entities:
                 triple = [(leidx, le), (ridx, rel), (reidx, re)]
                 if (is_parent(triple[1], triple[0], tree, token_pos) and is_parent(triple[2], triple[0], tree, token_pos)) or \
                         (is_parent(triple[0], triple[1], tree, token_pos) and is_parent(triple[2], triple[1], tree, token_pos)) or \
                         (is_parent(triple[0], triple[2], tree, token_pos) and is_parent(triple[1], triple[2], tree, token_pos)):
-                    triples.append(make_triple(triple, token_words))
+                    cp_token_words = list(token_words)
+                    triple_obj = make_triple(triple, cp_token_words)
+                    for node, condition in token_conditions.items():
+                        dep_entity = tree[node]
+                        for rules in sorted(condition, key=lambda k: k['token'][2], reverse=True):
+                            dep = rules['token']
+                            for rule in rules['rules']:
+                                if rule not in [le, rel, re]:
+                                    break
+                            else:
+                                print(dep_entity, dep)
+                                if dep_entity[2] <= dep[2]:
+                                    cp_token_words[dep_entity[2] - 1] += ' ' + cp_token_words[dep[2] - 1]
+                                else:
+                                    cp_token_words[dep_entity[2] - 1] = cp_token_words[dep[2] - 1] + ' ' + cp_token_words[dep_entity[2] - 1]
+                                triple_obj = make_triple(triple, cp_token_words)
+                                if dep[0] == 'case' and triple_obj not in triples:
+                                    triples.append(triple_obj)
+                                continue
+                            break
+                    if triple_obj not in triples:
+                        triples.append(triple_obj)
     return triples
 
 
@@ -671,13 +714,12 @@ def make_triple(triple, token_names):
     }
 
 
-def get_relations(nlp, sentence, lang='swe', sub_call=False):
-    _, token_names = nlp.word_tokenize(sentence, words=True)
+def get_relations(nlp, sentence, sub_call=False):
     rel_idx = 0
     pos_tags = nlp.pos_tag(sentence)
     print("Parsed sentence", sentence)
     tree = nlp.dependency_parse(sentence)
-    splits = [idx for idx, dep in enumerate(tree) if dep[rel_idx] == 'ROOT' or dep[rel_idx] == 'parataxis'] + [len(tree)]
+    splits = [idx for idx, dep in enumerate(tree) if dep[rel_idx] == 'ROOT'] + [len(tree)]# or dep[rel_idx] == 'parataxis'] + [len(tree)]
     sentences = [tree[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
     pos_sentences = [pos_tags[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
     relations = [
@@ -690,7 +732,7 @@ def get_relations(nlp, sentence, lang='swe', sub_call=False):
 
 
 
-def get_relations2(tree, lang='swe', sub_call=False):
+def get_relations2(tree, sub_call=False):
     global SUBJS, OBJS
 
     rel = [[tree]]
@@ -711,17 +753,16 @@ def get_relations2(tree, lang='swe', sub_call=False):
                 'relations': rel,
                 'entity': child,
                 'propagation_entities': propagation_entities,
-                'parent': tree,
-                'lang': lang
+                'parent': tree
             }
             if conditions(rule['conditions'], **kwargs) is True:
                 do_actions(rule['actions'], **kwargs)
         sub_prop_entities, sub_rels_tmp = get_relations(child, sub_call=True)
         sub_rels += sub_rels_tmp
-        propagation_entities += handle_propagations(sub_prop_entities, rel, child, lang=lang)
+        propagation_entities += handle_propagations(sub_prop_entities, rel, child)
 
     if tree['dep_rel'] == 'START_DOC':
-        handle_propagations(propagation_entities, rel, tree, lang=lang)
+        handle_propagations(propagation_entities, rel, tree)
     subjs = [r for r in rel[0] if r['dep_rel'] == 'nsubj']
     #if not subjs and tree['dep_rel'] != 'parataxis':
     #    closest_subj = sorted(SUBJS, key=lambda s: s['token'] - tree['token'])[-1] if SUBJS else None
@@ -732,9 +773,9 @@ def get_relations2(tree, lang='swe', sub_call=False):
     # if tree['dep_rel'] == 'ROOT':
     #if tree['dep_rel'] == 'START_DOC':
     #     print("Child")
-    #     print_tree(tree, lang='eng')
+    #     print_tree(tree)
     print([','.join([merge_entities([e] + list(e.get('sub_info', {}).values())).get('token_name', 'NNN') for e in r]) for r in rel])
     all_relations = sub_rels + rel
     if sub_call is False:
-        all_relations = split_relations(all_relations, lang=lang)
+        all_relations = split_relations(all_relations)
     return propagation_entities, all_relations

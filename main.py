@@ -4,6 +4,7 @@ from collections import defaultdict
 import pandas
 from stanfordcorenlp import StanfordCoreNLP
 from deeppavlov import configs, build_model
+from information_extraction.part_of_speech import set_language
 from information_extraction.parser import print_tree
 import re
 import csv
@@ -249,7 +250,8 @@ def parse_relations(nlp, sentence, lang='swe', use_openie=False, debug=False):
         print("Dependency tree for", "'{sentence}'".format(sentence=sentence))
         for sent_tree in tree:
             print_tree(sent_tree[-1])
-    generateie = get_relations(nlp, sentence, lang=lang)
+    set_language(lang)
+    generateie = get_relations(nlp, sentence)
     #generateie = [triple for s in tree for triple in get_relations(s[-1], lang=lang)[1]]
     relations += list(zip(['generateie'] * len(generateie), generateie))
     if use_openie:

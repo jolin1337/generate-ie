@@ -1,29 +1,13 @@
 """ Generall functions needed to parse a sentence """
 import json
-
-
-def get_pos_tags(lang='swe'):
-    global POS, language
-    if POS is not None and lang == language:
-        return POS
-
-    """ Load predefined pos tag mappings """
-    with open('pos-tags.json', 'r') as pos_file:
-        print("Loading pos-tags ({})".format(lang))
-        pos_tags_file = json.load(pos_file)
-        pos_tags = {c['key']: c['value'] for c in pos_tags_file[lang + '_pos']}
-        POS = pos_tags
-        language = lang
-        return pos_tags
+from .part_of_speech import get_pos
 
 
 language='swe'
-POS = None
 
 
 def print_tree(tree, depth=0, lang='swe'):
     """ Print dependency tree"""
-    POS = get_pos_tags(lang)
     # if depth > 10: return
     colors = {
         'punct': '1;30',  # GREEN
@@ -58,7 +42,7 @@ def print_tree(tree, depth=0, lang='swe'):
     colors['DT'] = '0;35'
     colors['MD'] = '0;36'
     colors['WDT'] = '0;37'
-    pos_class = POS.get(tree['pos'])
+    pos_class = get_pos(tree['pos'])
     for k, value in colors.items():
         colors[k] = f'\033[{value}m'
     color_pos = colors.get(tree["pos"], colors['NO_COLOR'])
@@ -73,22 +57,21 @@ def print_tree(tree, depth=0, lang='swe'):
 
 
 def relation_score_of(relation):
-    if POS.get(relation['pos']) == 'Verb':
+    if get_pos(relation['pos']) == 'Verb':
         return 10
     if 'subj' in relation['dep_rel']:
         return 9
     if 'obj' in relation['dep_rel']:
         return 8
-    if POS.get(relation['pos']) == 'Noun':
+    if get_pos(relation['pos']) == 'Noun':
         return 7
-    if POS.get(relation['pos']) == 'Adverb':
+    if get_pos(relation['pos']) == 'Adverb':
         return 6
-    if POS.get(relation['pos']) == 'Adjective':
+    if get_pos(relation['pos']) == 'Adjective':
         return 5
     return 0
 
 def split_relations(rel, lang='swe'):
-    POS = get_pos_tags(lang)
     split_relations = []
     relations = [sorted(relation, key=lambda r: relation_score_of(r), reverse=True) for relation in rel]
     #print('\n'.join([','.join([merge_entities([e] + list(e.get('sub_info',{}).values())).get('token_name', 'NNN') for e in r]) for r in relations ]))
@@ -97,17 +80,17 @@ def split_relations(rel, lang='swe'):
         for r in relation[2:]:
             subject = relation = object = None
             r_triple = first + [r] # sorted(first + [r], key=lambda e: e['token'])
-            if POS.get(r_triple[0]['pos']) == 'Verb' or any([POS.get(e['pos']) == 'Verb' for e in
+            if get_pos(r_triple[0]['pos']) == 'Verb' or any([get_pos(e['pos']) == 'Verb' for e in
                 r_triple[0].get('sub_info', {}).values()]):
                 relation = r_triple[0]
                 subject = r_triple[1]
                 object = r_triple[2]
             else:
                 subject = r_triple[0]
-                if POS.get(r_triple[1]['pos']) == 'Verb' or r_triple[1]['dep_rel'] == 'case' or any([POS.get(e['pos']) == 'Verb' or e['dep_rel'] == 'case' for e in r_triple[1].get('sub_info', {}).values()]):
+                if get_pos(r_triple[1]['pos']) == 'Verb' or r_triple[1]['dep_rel'] == 'case' or any([get_pos(e['pos']) == 'Verb' or e['dep_rel'] == 'case' for e in r_triple[1].get('sub_info', {}).values()]):
                     relation = r_triple[1]
                     object = r_triple[2]
-                elif POS.get(r_triple[2]['pos']) == 'Verb' or r_triple[2]['dep_rel'] == 'case' or any([POS.get(e['pos']) == 'Verb' or e['dep_rel'] == 'case' for e in r_triple[2].get('sub_info', {}).values()]):
+                elif get_pos(r_triple[2]['pos']) == 'Verb' or r_triple[2]['dep_rel'] == 'case' or any([get_pos(e['pos']) == 'Verb' or e['dep_rel'] == 'case' for e in r_triple[2].get('sub_info', {}).values()]):
                     relation = r_triple[2]
                     object = r_triple[1]
             if None not in [subject, relation, object]:
