@@ -1,0 +1,282 @@
+{
+    "rules": [
+        {
+            "conditions": {
+                "dep_rel": "conj",
+                "pos": "Noun",
+                "not": {
+                    "parent": {
+                        "dep_rel": "obl"
+                    }
+                }
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "count": 1,
+                    "type": "entity",
+                    "copy_relation": true
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "expl"
+            },
+            "actions": [{
+                "method": "add_expl_entity"
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "dislocated"
+            },
+            "actions": [{
+                "method": "add_entity"
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "conj",
+                "pos": "Pronoun"
+            },
+            "actions": [{
+                "method": "add_nsubj_entity"
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "advmod"
+            },
+            "actions": [{
+                "method": "add_entity",
+                "params": {
+                    "which_relations": "all"
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "amod"
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "count": 1,
+                    "line": false,
+                    "type": "concat"
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "punct",
+                "pos": "Number"
+            },
+            "actions": {
+                "method": "propagate_entity",
+                "params": {
+                    "type": "concat"
+                }
+            }
+        },
+        {
+            "conditions": {
+                "dep_rel": "nummod",
+                "parent": {
+                    "or": [
+                        { "dep_rel": "nmod" },
+                        { "dep_rel": "nmod:npmod" },
+                        { "dep_rel": "advmod" },
+                        { "dep_rel": "obl" },
+                        { "pos": "Noun" }
+                    ]
+                }
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "count": 1,
+                    "line": false,
+                    "type": "concat"
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "fixed"
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "count": 3,
+                    "line": false,
+                    "type": "concat"
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "nummod",
+                "not": {
+                    "or": [{
+                        "parent": {
+                            "dep_rel": "nmod"
+                        }
+                    }, {
+                        "parent": {
+                            "dep_rel": "nmod:npmod"
+                        }
+                    }, {
+                        "parent": {
+                            "pos": "Noun"
+                        }
+                    }]
+                }
+            },
+            "actions": [{
+                "method": "add_entity",
+                "params": {
+                    "all": true
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "or": [
+                    {"dep_rel": "nmod:npmod"}
+                ]
+            },
+            "actions": [{
+                "method": "add_entity"
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "case"
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "count": 2,
+                    "type": "concat"
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "cop",
+                "pos": "VBZ"
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "count": 1,
+                    "type": "concat"
+                }
+            }, {
+                "method": "add_entity"
+            }]
+        },
+        {
+            "conditions": {
+                "or": [
+                    {"dep_rel": "compound"},
+                    {"dep_rel": "compound:prt"}
+                ]
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "type": "concat"
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "ccomp"
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "count": 1,
+                    "type": "entity"
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "aux",
+                "pos": "MD"
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "count": 1,
+                    "type": "concat"
+                }
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "cop",
+                "pos": "Verb",
+                "not": {
+                    "pos": "VBZ"
+                }
+            },
+            "actions": [{
+                "method": "add_entity"
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "nsubj",
+                "not": {
+                    "dep_rel": "parataxis"
+                }
+            },
+            "actions": [{
+                "method": "add_nsubj_entity"
+            }]
+        },
+        {
+            "conditions": {
+                "and": [
+                    {
+                        "or": [
+                            { "pos": "Noun" },
+                            { "pos": "Adjective" },
+                            { "pos": "Adverb" }
+                        ]
+                    },
+                    {
+                        "or": [
+                            {"dep_rel": "nmod"},
+                            {"dep_rel": "dobj"},
+                            {"dep_rel": "obj"},
+                            {"dep_rel": "obl"},
+                            {"dep_rel": "dep"}
+                        ]
+                    }
+                ]
+            },
+            "actions": [{
+                "method": "add_entity"
+            }]
+        },
+        {
+            "conditions": {
+                "dep_rel": "appos",
+                "or": [
+                    {"pos": "Noun"},
+                    {"pos": "Adjective"}
+                ]
+            },
+            "actions": [
+                {"method": "add_entity"},
+                {"method": "propagate_entity"}
+            ]
+        }
+    ]
+}
