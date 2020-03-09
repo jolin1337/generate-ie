@@ -8,6 +8,7 @@ from information_extraction.part_of_speech import set_language
 from information_extraction.parser import print_tree
 import re
 import csv
+import collections
 
 
 class StanfordCoreNLPEx(StanfordCoreNLP):
@@ -142,49 +143,56 @@ def get_sentence_tree(nlp, sentence, use_alias=False):
     return dep_tree
 
 
-class Counter:
-    def __init__(self):
-        self.values = []
-        self.total = 0
+class Counter(collections.Counter):
+    @property
+    def __values(self):
+        return self.keys()
+
+    @property
+    def __total(self):
+        return sum(self.values())
 
     def count(self, value):
-        self.total += 1
-        if value in self.values:
-            return
-        self.values.append(value)
+        current = self.get(value, 0)
+        self[value] = current + 1
 
     def count_if(self, value, f):
         if f(value):
             self.count(value)
 
     def get_avg(self):
-        return len(self.values) / max(1, self.total)
+        return len(self.__values) / max(1, self.__total)
 
     def get_total(self):
-        return self.total
+        return self.__total
 
     def get_count(self):
-        return len(self.values)
+        return len(self.__values)
 
 class Metrics:
     def __init__(self):
         self.entity_counter = Counter()
         self.relation_counter = Counter()
+        self.triple_counter = Counter()
 
     def count(self, objs, f=lambda t: True):
         counts = 0
         if not isinstance(objs, list):
             objs = [objs]
         for obj in objs:
+            matches = 0
             if f('object'):
                 self.entity_counter.count(obj['object'])
-                counts += 1
+                matches += 1
             if f('subject'):
                 self.entity_counter.count(obj['subject'])
-                counts += 1
+                matches += 1
             if f('relation'):
                 self.relation_counter.count(obj['relation'])
-                counts += 1
+                matches += 1
+            counts += matches
+            if matches == 3:
+                self.triple_counter.count(obj['object'] + '::' + obj['relation'] + '::' + obj['subject'])
         return counts
 
     def count_if(self, objs1, objs2, f):
@@ -202,14 +210,17 @@ class Metrics:
 
     def get_count(self):
         return {'entity': self.entity_counter.get_count(),
-                'relation': self.relation_counter.get_count()}
+                'relation': self.relation_counter.get_count(),
+                'triple': self.triple_counter.get_count()}
 
     def get_total(self):
         return {'entity': self.entity_counter.get_total(),
-                'relation': self.relation_counter.get_total()}
+                'relation': self.relation_counter.get_total(),
+                'triple': self.triple_counter.get_total()}
     def get_avg(self):
         return {'entity': self.entity_counter.get_avg(),
-                'relation': self.relation_counter.get_avg()}
+                'relation': self.relation_counter.get_avg(),
+                'triple': self.triple_counter.get_avg()}
 
 
 def load_data(dataset, max_samples=100):
@@ -310,6 +321,8 @@ def evaluate_matches(dataset, lang, **kwargs):
     openie_counter = Metrics()
     generateie_counter = Metrics()
     match_counter = Metrics()
+    triples = open('results/triples_life_' + lang + '.csv', 'w')
+    triples_csv = csv.writer(triples, quoting=csv.QUOTE_NONNUMERIC)
     relations = open('results/relations_life_' + lang + '.csv', 'w')
     relations_csv = csv.writer(relations, quoting=csv.QUOTE_NONNUMERIC)
     entities = open('results/entities_life_' + lang + '.csv', 'w')
@@ -327,7 +340,8 @@ def evaluate_matches(dataset, lang, **kwargs):
     ]
     entities_csv.writerow(row_columns)
     relations_csv.writerow(row_columns)
-    for text in load_data(dataset, max_samples=100):
+    triples_csv.writerow(row_columns)
+    for text in load_data(dataset, max_samples=10000):
         oie_rels = []
         gie_rels = []
         for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True):
@@ -340,7 +354,7 @@ def evaluate_matches(dataset, lang, **kwargs):
         match_counter.count_if(
                 oie_rels,
                 gie_rels,
-                lambda o1, o2, t: o1[t] in o2[t] or o2[t] in o1[t])
+                lambda o1, o2, t: o1[t] == o2[t] or o2[t] == o1[t])
                 #lambda o1, o2, t: o1[t + 'Span'] in o2[t + 'Span'])
         row = [
             openie_counter.get_avg(),
@@ -355,6 +369,7 @@ def evaluate_matches(dataset, lang, **kwargs):
         ]
         entities_csv.writerow([c['entity'] for c in row])
         relations_csv.writerow([c['relation'] for c in row])
+        triples_csv.writerow([c['relation'] for c in row])
         print("Open IE avg:", openie_counter.get_avg())
         print("Open IE count:", openie_counter.get_count())
         print("Open IE total:", openie_counter.get_total())
