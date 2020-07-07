@@ -39,7 +39,7 @@ STANFORD_VERSION=$1
 embedFile=$2
 source=lines
 source=talbanken
-source='all'
+#source='all'
 mode='w'
 for conll_source in 'talbanken' 'pud'
 do
@@ -69,17 +69,20 @@ java -mx16g -cp "$STANFORD_VERSION/*" \
      -testFile sv_${source}-ud-test.conllu.clean
 
 mkdir --parents "../models/${source}"
-cp "server-${source}.properties" "../models/${source}/"
-cp "swedish.tagger" "../models/${source}/"
-cp "swe-dependency-model-${source}.txt.gz" "../models/${source}/"
 echo "
 annotators = tokenize, ssplit, pos, depparse
 tokenize.language = se
 pos.model = $( pwd )/../models/${source}/swedish.tagger
 depparse.model = $( pwd )/../models/${source}/swe-dependency-model-${source}.txt.gz
-" > server-${source}.properties
+" > server.properties
 echo "
-java -mx16g -cp \"$( pwd )/$STANFORD_VERSION/*\" \
+PROPERTY_FILE=\${1:-\${PROPERTY_FILE:-\"$( pwd )/server.properties\"}}
+java -mx${JAVA_XMX:-4g} -cp \"$( pwd )/$STANFORD_VERSION/*\" \
       edu.stanford.nlp.pipeline.StanfordCoreNLPServer \
-      -serverProperties "$( pwd )/server-${source}.properties"
+      -serverProperties $PROPERTY_FILE \
 " > run_server.sh
+chmod +x run_server.sh
+cp "server.properties" "../models/${source}/"
+cp "run-server.sh" "../models/${source}/"
+cp "swedish.tagger" "../models/${source}/"
+cp "swe-dependency-model-${source}.txt.gz" "../models/${source}/"

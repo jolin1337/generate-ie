@@ -1,5 +1,6 @@
 
 section=${1:-all}
+STANFORD_VERSION=${$1:-"stanford-corenlp-full-2018-10-05"}
 
 trainGensim () {
     echo "Training Gensim word2vec model"
@@ -17,13 +18,12 @@ trainDependencyParser () {
     echo "Clone swedish depparse model repo"
     git clone https://github.com/klintan/corenlp-swedish-depparse-model
     cd corenlp-swedish-depparse-model
-    STANFORD_VERSION="stanford-corenlp-full-2018-10-05"
     if [ -d "$STANFORD_VERSION" ]; then
-	echo "Skipping download of $STANFORD_VERSION, since it already exists"
+	    echo "Skipping download of $STANFORD_VERSION, since it already exists"
     else
-	echo "Downloading $STANFORD_VERSION"
-	wget -O $STANFORD_VERSION.zip http://nlp.stanford.edu/software/$STANFORD_VERSION.zip
-	unzip $STANFORD_VERSION.zip -d ./
+        echo "Downloading $STANFORD_VERSION"
+        wget -O $STANFORD_VERSION.zip http://nlp.stanford.edu/software/$STANFORD_VERSION.zip
+        unzip $STANFORD_VERSION.zip -d ./
     fi
 
     echo "Download Part of speech tagger"

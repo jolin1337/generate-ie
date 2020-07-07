@@ -1,0 +1,42 @@
+version: '3.3'
+
+services:
+  neo4j:
+    image: neo4j:4.0
+    ports:
+      - 7474:7474 # for HTTP
+      - 7473:7473 # for HTTPS
+      - 7687:7687 # for Bolt
+    volumes:
+      - './data/neo4j:/data'
+    environment:
+      NEO4J_AUTH: "neo4j/password"
+  corenlp:
+    image: nlpbox/corenlp
+    command: /app/model/talbanken/run-server.sh
+    working_dir: /app
+    #depends:
+    #  - corenlp-train
+    ports:
+      - 9000:9000
+    environment:
+        JAVA_XMX: 16g
+    volumes:
+      - './models:/app/models'
+      - './data:/app/data'
+
+  corenlp-train:
+    image: nlpbox/corenlp
+    command: /app/train.sh all /opt/corenlp
+    working_dir: /app
+    environment:
+        JAVA_XMX: 16g
+    volumes:
+      - './models:/app/models'
+      - './data:/app/data'
+
+  information-extraction:
+    build: .
+    command: python main.py matches --dataset data/movie_dataset/summary-en.csv --language eng
+    volumes:
+      - './:/app'

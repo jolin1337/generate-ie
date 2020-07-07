@@ -2,6 +2,19 @@
     "rules": [
         {
             "conditions": {
+                "dep_rel": "neg"
+            },
+            "actions": [{
+                "method": "propagate_entity",
+                "params": {
+                    "count": 1,
+                    "type": "concat",
+                    "copy_relation": false
+                }
+            }]
+        },
+        {
+            "conditions": {
                 "dep_rel": "conj",
                 "pos": "Noun",
                 "not": {

@@ -1,59 +1,14 @@
 """ Information extraction on sample sentences """
 import time
-from collections import defaultdict
 import pandas
-from stanfordcorenlp import StanfordCoreNLP
-from deeppavlov import configs, build_model
 from information_extraction.part_of_speech import set_language
 from information_extraction.parser import print_tree
-import re
 import csv
 import collections
-
-
-class StanfordCoreNLPEx(StanfordCoreNLP):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        #self.ner_model = build_model(configs.ner.ner_ontonotes_bert_mult, download=True)
-
-    #def ner(self, sentence):
-    #    return [(i, entity)
-    #            for i, entity in enumerate(self.ner_model([sentence])[1][0])]
-
-    def word_tokenize(self, sentence, words=False, span=False):
-        r_dict = self._request(self.url, 'ssplit,tokenize', sentence)
-        tokens = ([token['index']
-                   for s in r_dict['sentences']
-                   for token in s['tokens']],)
-
-        # Whether return token span
-        if span:
-            spans = [(token['characterOffsetBegin'], token['characterOffsetEnd'])
-                     for s in r_dict['sentences']
-                     for token in s['tokens']]
-            tokens = (*tokens, spans)
-
-        # Whether return token words
-        if words:
-            word_tokens = [(token['originalText'])
-                           for s in r_dict['sentences']
-                           for token in s['tokens']]
-            tokens = (*tokens, word_tokens)
-
-        if len(tokens) == 1:
-            return tokens[0]
-        else:
-            return tokens
-
-    def parse(self, sentence):
-        r_dict = self._request(self.url, 'pos,parse', sentence)
-        return [s['parse'] for s in r_dict['sentences']]
-
-    def _check_args(self):
-        self._check_language(self.lang)
-        if not re.match('\\d+g', self.memory):
-            raise ValueError('memory=' + self.memory + ' not supported. Use 4g, 6g, 8g and etc. ')
-
+from py2neo import Graph, Node, Relationship
+from py2neo.ogm import GraphObject, Property, RelatedTo
+from information_extraction.sentence_structure import StanfordCoreNLPEx, get_sentence_tree
+from information_extraction.triple_evaluators import Metrics
 
 
 def get_nlp_connection(url=None, memory='2g', port=8001, print_startuptime=True):
@@ -70,157 +25,6 @@ def get_nlp_connection(url=None, memory='2g', port=8001, print_startuptime=True)
     if print_startuptime:
         print('Startuptime:', (time.time() - start_time))
     return nlp
-
-
-def get_sentence_tree(nlp, sentence, use_alias=False):
-    """ Parse stanford corenlp api dependency tree """
-    tokens, token_names = nlp.word_tokenize(sentence, words=True)
-    _, entities = zip(*nlp.ner(sentence)) # (0,['O'] * len(tokens)) #
-    print("Entityies", entities)
-    if use_alias:
-        alias_entity_bank = {
-            'LOCATION': 'Stockholm',
-            'B-LOCATION': 'Stockholm',
-            'I-LOCATION': 'Kommun',
-            'PERSON': 'Adam',
-            'B-PERSON': 'Adam',
-            'I-PERSON': 'Andersson',
-            'I-LOCATION': 'Kommun',
-            'NUMBER': '1',
-            'B-NUMBER': '1',
-            'I-NUMBER': '000'
-        }
-        ignored_entities = [
-            'B-DATE', 'I-DATE', 'DATE'
-        ]
-        alias_entities = []
-        alias_sentence = []
-        real_sentence = []
-        for i, entity in enumerate(entities):
-            if entity == 'O' or entity in ignored_entities:
-                alias_entities.append(entity)
-                alias_sentence.append(token_names[i])
-                real_sentence.append(token_names[i])
-            elif entity.startswith('B-') or '-' not in entity:
-                alias_entities.append(entity)
-                alias_sentence.append(token_names[i]) # alias_entity_bank.get(entity, 'object'))
-                real_sentence.append(token_names[i])
-            else:
-                real_sentence[-1] += ' ' + token_names[i]
-        tokens, _ = nlp.word_tokenize(' '.join(alias_sentence), words=True)
-        token_names = real_sentence
-        entities = alias_entities
-        sentence = ' '.join(alias_sentence)
-    print("Parsed sentence", sentence)
-    tree = nlp.dependency_parse(sentence)
-    pos_tags = nlp.pos_tag(sentence)
-    dep_tree = []
-    for i, node in enumerate(tree):
-        passed_roots = [j for j, t in enumerate(tree) if t[0] == 'ROOT' and j <= i]
-        sentence_offset = max(passed_roots)
-        name = token_names[tokens.index(node[2], sentence_offset)] if node[2] > 0 else '_'
-        node_dict = {
-            'dep_rel': node[0],
-            'token': tokens.index(node[2], sentence_offset) if name != 'ROOT' else 0,
-            'parent_token': tokens.index(node[1], sentence_offset) if node[1] > 0 else -1,
-            'pos': pos_tags[tokens.index(node[2], sentence_offset)][1],
-            'token_name': name,
-            'entity': entities[tokens.index(node[2], sentence_offset)],
-            'children': []
-        }
-        if node_dict['dep_rel'] == 'ROOT':
-            dep_tree.append(defaultdict(lambda: defaultdict(list)))
-            dep_tree[-1][-1] = {
-                'children': [],
-                'dep_rel': 'START_DOC',
-                'token_name': 'START_DOC',
-                'pos': '', 'token': -1
-            }
-        node_dict['children'] = dep_tree[-1][node_dict['token']]['children']
-        dep_tree[-1][node_dict['token']] = node_dict
-        dep_tree[-1][node_dict['parent_token']]['children'].append(dep_tree[-1][node_dict['token']])
-        node_dict['parent'] = dep_tree[-1][node_dict['parent_token']]
-    return dep_tree
-
-
-class Counter(collections.Counter):
-    @property
-    def __values(self):
-        return self.keys()
-
-    @property
-    def __total(self):
-        return sum(self.values())
-
-    def count(self, value):
-        current = self.get(value, 0)
-        self[value] = current + 1
-
-    def count_if(self, value, f):
-        if f(value):
-            self.count(value)
-
-    def get_avg(self):
-        return len(self.__values) / max(1, self.__total)
-
-    def get_total(self):
-        return self.__total
-
-    def get_count(self):
-        return len(self.__values)
-
-class Metrics:
-    def __init__(self):
-        self.entity_counter = Counter()
-        self.relation_counter = Counter()
-        self.triple_counter = Counter()
-
-    def count(self, objs, f=lambda t: True):
-        counts = 0
-        if not isinstance(objs, list):
-            objs = [objs]
-        for obj in objs:
-            matches = 0
-            if f('object'):
-                self.entity_counter.count(obj['object'])
-                matches += 1
-            if f('subject'):
-                self.entity_counter.count(obj['subject'])
-                matches += 1
-            if f('relation'):
-                self.relation_counter.count(obj['relation'])
-                matches += 1
-            counts += matches
-            if matches == 3:
-                self.triple_counter.count(obj['object'] + '::' + obj['relation'] + '::' + obj['subject'])
-        return counts
-
-    def count_if(self, objs1, objs2, f):
-        matches = []
-        for i, obj1 in enumerate(objs1):
-            if i in matches:
-                continue
-            for j, obj2 in enumerate(objs2):
-                if j in matches:
-                    continue
-                if self.count([obj1], f=lambda t: f(obj1, obj2, t)) > 0:
-                    matches.append(i)
-                    matches.append(j)
-                    break
-
-    def get_count(self):
-        return {'entity': self.entity_counter.get_count(),
-                'relation': self.relation_counter.get_count(),
-                'triple': self.triple_counter.get_count()}
-
-    def get_total(self):
-        return {'entity': self.entity_counter.get_total(),
-                'relation': self.relation_counter.get_total(),
-                'triple': self.triple_counter.get_total()}
-    def get_avg(self):
-        return {'entity': self.entity_counter.get_avg(),
-                'relation': self.relation_counter.get_avg(),
-                'triple': self.triple_counter.get_avg()}
 
 
 def load_data(dataset, max_samples=100):
@@ -262,7 +66,7 @@ def parse_relations(nlp, sentence, lang='swe', use_openie=False, debug=False):
         for sent_tree in tree:
             print_tree(sent_tree[-1])
     set_language(lang)
-    generateie = get_relations(nlp, sentence)
+    generateie = list(get_relations(nlp, sentence))
     #generateie = [triple for s in tree for triple in get_relations(s[-1], lang=lang)[1]]
     relations += list(zip(['generateie'] * len(generateie), generateie))
     if use_openie:
@@ -284,6 +88,9 @@ def evaluate_comparison(dataset, lang, **kwargs):
                 'subject': relation['subject'],
                 'relation': relation['relation'],
                 'object': relation['object'],
+                'subjectSpan': f"{relation['subjectSpan'][0]},{relation['subjectSpan'][1]}",
+                'relationSpan': f"{relation['relationSpan'][0]},{relation['relationSpan'][1]}",
+                'objectSpan': f"{relation['objectSpan'][0]},{relation['objectSpan'][1]}",
                 'text': text['sentence']
             }
             if len(data) == 0:
@@ -388,13 +195,66 @@ def evaluate_matches(dataset, lang, **kwargs):
     with open('results/matchie_' + lang + '.pkl', 'wb') as ie:
         pickle.dump(match_counter, ie)
 
+class Entity(GraphObject):
+    __primarykey__ = "entity_name"
+    __primarylabel__ = "Entity"
+    algorithm = Property()
+    source = Property()
+    entity_name = Property()
+    relates = RelatedTo("Entity")
+    defined_by = RelatedTo("Article")
+
+class Article(GraphObject):
+    __primarykey__ = "id"
+    __primarylabel__ = "Article"
+    id = Property()
+    sentence = Property()
+
+def upload_triples(dataset, lang, **kwargs):
+    graph = Graph("bolt://localhost:7687", auth=("neo4j", "password"))
+    nlp = get_nlp_connection(url='http://localhost', memory='16g', port=9000)
+    dataset_node = Node("Dataset", id=dataset)
+    lang_node = Node("Language", id=lang)
+    SOURCED = Relationship.type("SOURCED")
+    DEFINED_BY = Relationship.type("DEFINED_BY")
+    IS_LANG = Relationship.type("IS_LANGUAGE")
+    graph.merge(dataset_node, "Dataset", "id")
+    graph.merge(lang_node, "Language", "id")
+    for i, text in enumerate(load_data(dataset, max_samples=10000)):
+        tx = graph.begin()
+        article = Node("Article", id=i, sentence=text['sentence'])
+        tx.merge(article, "Article", "id")
+        tx.merge(IS_LANG(article, lang_node))
+
+        for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True):
+            algorithm_node = Node("Algorithm", id=source)
+            subject = Node("Entity",
+                           entity_name=relation['subject'])
+            object = Node("Entity",
+                           entity_name=relation['object'])
+            REL = Relationship.type(relation['relation'])
+            tx.merge(algorithm_node, "Algorithm", "id")
+            subj_sourced = SOURCED(subject, algorithm_node)
+            obj_sourced = SOURCED(object, algorithm_node)
+            subj_def = DEFINED_BY(subject, article)
+            obj_def = DEFINED_BY(object, article)
+            rel = REL(subject, object)
+            tx.merge(subj_sourced, "SOURCED", "entity_name")
+            tx.merge(obj_sourced, "SOURCED", "entity_name")
+            tx.merge(subj_def, "DEFINED_BY", "entity_name")
+            tx.merge(obj_def, "DEFINED_BY", "entity_name")
+            tx.merge(rel, "REL", "entity_name")
+        tx.commit()
+
+
+
 
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'method',
-        choices=['matches', 'comparison'],
+        choices=['matches', 'comparison', 'upload_triples'],
         help="matches or comparison")
     parser.add_argument(
         '--dataset',
@@ -416,6 +276,10 @@ if __name__ == '__main__':
     args = parse_args()
     args.dataset = args.dataset.format(language=args.language)
     import sys
-    methods = {'matches': evaluate_matches, 'comparison': evaluate_comparison}
+    methods = {
+        'matches': evaluate_matches,
+        'comparison': evaluate_comparison,
+        'upload_triples': upload_triples
+    }
     method = methods.get(args.method, None)
     method(dataset=args.dataset, lang=args.language, debug=args.debug)

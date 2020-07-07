@@ -39,8 +39,6 @@ def add_expl_entity(**kwargs):
         OBJS.append(new_child)
     else:
         new_child = sorted(OBJS, key=lambda s: s['token'] - new_child['token'])[-1] if OBJS else None
-    print("OBJS", OBJS)
-    print("OBJS", new_child)
     if new_child:
         entity = new_child.copy()
         entity['children'] = children
@@ -197,15 +195,12 @@ def get_sentence_relations(tree, pos_tags):
                 rule['actions'] = [rule['actions']]
             if not any((action['method'] == propagate_entity or action['method'] == 'propagate_entity') and action.get('params', {}).get('type') == 'concat' for action in rule['actions']):
                 continue
-            if word == 'full':
-                print("WWW", word, rule['conditions'], kwargs, dep[1], get_pos(kwargs['parent']['pos']))
             if conditions(rule['conditions'], **kwargs) and dep[1] > 0:
                 dep_entity = dep
                 rules = []
                 for action in rule['actions']:
                     method = action['method']
                     if isinstance(method, str):
-                        print(method, action_method_mapping)
                         method = action_method_mapping[method]
                     if method != propagate_entity:
                         continue
@@ -249,10 +244,6 @@ def get_sentence_relations(tree, pos_tags):
                 left_entities.append((eidx, entity))
             if eidx > ridx:
                 right_entities.append((eidx, entity))
-        print(token_words[rel[2]-1], rel, left_entities, right_entities)
-        print(token_words)
-        print(token_pos)
-        print(tree)
         for reidx, re in right_entities:
             for leidx, le in left_entities:
                 triple = [(leidx, le), (ridx, rel), (reidx, re)]
@@ -269,7 +260,6 @@ def get_sentence_relations(tree, pos_tags):
                                 if rule not in [le, rel, re]:
                                     break
                             else:
-                                print(dep_entity, dep)
                                 if dep_entity[2] <= dep[2]:
                                     cp_token_words[dep_entity[2] - 1] += ' ' + cp_token_words[dep[2] - 1]
                                 else:
@@ -303,6 +293,19 @@ def get_relations(nlp, sentence, sub_call=False):
     splits = [idx for idx, dep in enumerate(tree) if dep[rel_idx] == 'ROOT'] + [len(tree)]# or dep[rel_idx] == 'parataxis'] + [len(tree)]
     sentences = [tree[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
     pos_sentences = [pos_tags[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
+
+    for i, sent, pos in zip(range(len(sentences)), sentences, pos_sentences):
+        for triple in get_sentence_relations(sent, pos):
+            if i > 0:
+                offset = sum(len(s) for s in pos_sentences[:i])
+                triple['subjectSpan'][0] += offset
+                triple['subjectSpan'][1] += offset
+                triple['relationSpan'][0] += offset
+                triple['relationSpan'][1] += offset
+                triple['objectSpan'][0] += offset
+                triple['objectSpan'][1] += offset
+            yield triple
+    return
     relations = [
         triple
         for sent, pos in zip(sentences, pos_sentences)

@@ -1,6 +1,8 @@
 # Python related
 __pycache__/
 #.python-version
+venv/
+.env
 
 # Data and project spceific ignores
 data/

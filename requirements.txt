@@ -1,3 +1,6 @@
-git@github.com:jolin1337/stanford-corenlp.git
 deeppavlov
-stanford-corenlp
+stanfordcorenlp
+py2neo
+psycopg2
+beautifulsoup4
+pyjnius
