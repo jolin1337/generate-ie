@@ -13,8 +13,8 @@ services:
       NEO4J_AUTH: "neo4j/password"
   corenlp:
     image: nlpbox/corenlp
-    command: /app/model/talbanken/run-server.sh
-    working_dir: /app
+    #command: /app/model/talbanken/run-server.sh
+    #working_dir: /app
     #depends:
     #  - corenlp-train
     ports:
@@ -24,6 +24,7 @@ services:
     volumes:
       - './models:/app/models'
       - './data:/app/data'
+      - './run-server.sh:/app/model/talkbanken/run-server.sh'
 
   corenlp-train:
     image: nlpbox/corenlp
@@ -39,4 +40,8 @@ services:
     build: .
     command: python main.py matches --dataset data/movie_dataset/summary-en.csv --language eng
     volumes:
-      - './:/app'
+      - /home/johlin/.history:/home/dev/.history
+      - /home/johlin/.zsh_history:/home/dev/.zsh_history:rw
+      - ./:/home/dev/workspace/stanford-corenlp
+    depends_on:
+      - corenlp

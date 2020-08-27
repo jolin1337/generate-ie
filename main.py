@@ -10,6 +10,15 @@ from py2neo.ogm import GraphObject, Property, RelatedTo
 from information_extraction.sentence_structure import StanfordCoreNLPEx, get_sentence_tree
 from information_extraction.triple_evaluators import Metrics
 
+from jnius import autoclass
+
+CoreNLPUtils = autoclass('de.uni_mannheim.utils.coreNLP.CoreNLPUtils')
+#AnnotatedProposition = autoclass('de.uni_mannheim.minie.annotation.AnnotatedProposition')
+MinIE = autoclass('de.uni_mannheim.minie.MinIE')
+StanfordCoreNLP = autoclass('edu.stanford.nlp.pipeline.StanfordCoreNLP')
+String = autoclass('java.lang.String')
+Properties = autoclass('java.util.Properties')
+parser = CoreNLPUtils.StanfordDepNNParser()
 
 def get_nlp_connection(url=None, memory='2g', port=8001, print_startuptime=True):
     """ Open up a connection to stanford corenlp api """
@@ -54,7 +63,7 @@ def load_data(dataset, max_samples=100):
         text['sentence'] = sentence
         yield text
 
-def parse_relations(nlp, sentence, lang='swe', use_openie=False, debug=False):
+def parse_relations(nlp, sentence, lang='swe', use_openie=False, use_minie=False, debug=False):
     #if lang == 'swe':
     from information_extraction.swedish_parser import get_relations
     #else:
@@ -70,27 +79,41 @@ def parse_relations(nlp, sentence, lang='swe', use_openie=False, debug=False):
     #generateie = [triple for s in tree for triple in get_relations(s[-1], lang=lang)[1]]
     relations += list(zip(['generateie'] * len(generateie), generateie))
     if use_openie:
-        openie = [triple for s in nlp._request(nlp.url, 'openie', sentence)['sentences'] for triple in s['openie']]
+        openie = [triple for s in nlp._request('openie', sentence)['sentences'] for triple in s['openie']]
         relations += list(zip(['openie'] * len(openie), openie))
+    if use_minie:
+        model = MinIE(String(sentence), parser, 2)
+        model.getPropositions().elements()
+        triple_names = ['subject', 'relation', 'object']
+        minie = [
+            {
+                triple_names[i]: val.toString() if val is not None else None
+                for i, val in enumerate(ap.getTriple().elements())
+                if i < 3
+            } for ap in model.getPropositions().elements()
+            if ap is not None
+        ]
+        minie = [triple for triple in minie if all(triple.get(n, None) is not None for n in triple_names)]
+        relations += list(zip(['minie'] * len(openie), minie))
     print("parse sentences...")
     for source, relation in relations:
         yield source, relation
 
 def evaluate_comparison(dataset, lang, **kwargs):
-    nlp = get_nlp_connection(url='http://localhost', memory='16g', port=9000)
+    nlp = get_nlp_connection(url='http://corenlp', memory='16g', port=9000)
     all_texts_relations = []
     for i, text in enumerate(load_data(dataset, max_samples=100)):
         data = []
-        for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True, debug=kwargs.get('debug')):
+        for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True, use_minie=True, debug=kwargs.get('debug')):
             row = {
                 'id': text.get('qid', i),
                 'source': source,
                 'subject': relation['subject'],
                 'relation': relation['relation'],
                 'object': relation['object'],
-                'subjectSpan': f"{relation['subjectSpan'][0]},{relation['subjectSpan'][1]}",
-                'relationSpan': f"{relation['relationSpan'][0]},{relation['relationSpan'][1]}",
-                'objectSpan': f"{relation['objectSpan'][0]},{relation['objectSpan'][1]}",
+                'subjectSpan': f"{relation.get('subjectSpan', [-1, -1])[0]},{relation.get('subjectSpan', [-1, -1])[1]}",
+                'relationSpan': f"{relation.get('relationSpan', [-1, -1])[0]},{relation.get('relationSpan', [-1, -1])[1]}",
+                'objectSpan': f"{relation.get('objectSpan', [-1, -1])[0]},{relation.get('objectSpan', [-1, -1])[1]}",
                 'text': text['sentence']
             }
             if len(data) == 0:
@@ -124,10 +147,16 @@ def evaluate_comparison(dataset, lang, **kwargs):
 
 def evaluate_matches(dataset, lang, **kwargs):
     """ Evaluate model agains openie """
-    nlp = get_nlp_connection(url='http://localhost', memory='16g', port=9000)
-    openie_counter = Metrics()
-    generateie_counter = Metrics()
-    match_counter = Metrics()
+    nlp = get_nlp_connection(url='http://corenlp', memory='16g', port=9000)
+    ie_models = {
+        model_name: {
+            'metrics': Metrics(),
+            'rels': [],
+            'name': model_name
+        }
+        for model_name in ['openie', 'generateie', 'minie']
+    }
+    match_counters = [(m, Metrics()) for m in ie_models.keys() if m != 'generateie']
     triples = open('results/triples_life_' + lang + '.csv', 'w')
     triples_csv = csv.writer(triples, quoting=csv.QUOTE_NONNUMERIC)
     relations = open('results/relations_life_' + lang + '.csv', 'w')
@@ -135,65 +164,41 @@ def evaluate_matches(dataset, lang, **kwargs):
     entities = open('results/entities_life_' + lang + '.csv', 'w')
     entities_csv = csv.writer(entities, quoting=csv.QUOTE_NONNUMERIC)
     row_columns = [
-        "openie avg",
-        "openie count",
-        "openie total",
-        "generateie avg",
-        "generateie count",
-        "generateie total",
-        "match avg",
-        "match count",
-        "match total"
+        *[model + metric for model in ie_models.keys() for metric in [' avg', ' count', ' total']],
+        *['match ' + model + metric for model in ie_models.keys() for metric in [' avg', ' count', ' total'] if model != 'generateie']
     ]
     entities_csv.writerow(row_columns)
     relations_csv.writerow(row_columns)
     triples_csv.writerow(row_columns)
-    for text in load_data(dataset, max_samples=10000):
-        oie_rels = []
-        gie_rels = []
-        for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True):
-            if source == 'openie':
-                openie_counter.count(relation)
-                oie_rels.append(relation)
-            else:
-                generateie_counter.count(relation)
-                gie_rels.append(relation)
-        match_counter.count_if(
-                oie_rels,
-                gie_rels,
-                lambda o1, o2, t: o1[t] == o2[t] or o2[t] == o1[t])
-                #lambda o1, o2, t: o1[t + 'Span'] in o2[t + 'Span'])
+    for i, text in enumerate(load_data(dataset, max_samples=10000)):
+        for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True, use_minie=True):
+            ie_models[source]['rels'].append(relation)
+            ie_models[source]['metrics'].count(relation)
+        for match_model, match_counter in match_counters:
+            match_counter.count_if(
+                    ie_models[match_model]['rels'],
+                    ie_models[source]['rels'],
+                    lambda o1, o2, t: o1[t] == o2[t] or o2[t] == o1[t])
+                    #lambda o1, o2, t: o1[t + 'Span'] in o2[t + 'Span'])
         row = [
-            openie_counter.get_avg(),
-            openie_counter.get_count(),
-            openie_counter.get_total(),
-            generateie_counter.get_avg(),
-            generateie_counter.get_count(),
-            generateie_counter.get_total(),
-            match_counter.get_avg(),
-            match_counter.get_count(),
-            match_counter.get_total()
+            *[getattr(model['metrics'], metric)() for model in ie_models.values() for metric in ['get_avg', 'get_count', 'get_total']],
+            *[getattr(model['metrics'], metric)() for model in ie_models.values() for metric in ['get_avg', 'get_count', 'get_total'] if model['name'] != 'generateie']
         ]
         entities_csv.writerow([c['entity'] for c in row])
         relations_csv.writerow([c['relation'] for c in row])
         triples_csv.writerow([c['relation'] for c in row])
-        print("Open IE avg:", openie_counter.get_avg())
-        print("Open IE count:", openie_counter.get_count())
-        print("Open IE total:", openie_counter.get_total())
-        print("Generated IE avg:", generateie_counter.get_avg())
-        print("Generated IE count:", generateie_counter.get_count())
-        print("Generated IE total:", generateie_counter.get_total())
-        print("Match IE avg:", match_counter.get_avg())
-        print("Match IE count:", match_counter.get_count())
-        print("Match IE total:", match_counter.get_total())
+        for name, val in zip(row_columns, row):
+            print(name + ":", val)
 
-    import pickle
-    with open('results/generateie_' + lang + '.pkl', 'wb') as ie:
-        pickle.dump(generateie_counter, ie)
-    with open('results/openie_' + lang + '.pkl', 'wb') as ie:
-        pickle.dump(openie_counter, ie)
-    with open('results/matchie_' + lang + '.pkl', 'wb') as ie:
-        pickle.dump(match_counter, ie)
+        if i % 100 == 0:
+            print("Saving data...")
+            import pickle
+            for model in ie_models.values():
+                with open(f'results/{model["name"]}_{lang}.pkl', 'wb') as ie:
+                    pickle.dump(model['metrics'], ie)
+            for match_model, match_counter in match_counters:
+                with open(f'results/matchie_{match_model}_{lang}.pkl', 'wb') as ie:
+                    pickle.dump(match_counter, ie)
 
 class Entity(GraphObject):
     __primarykey__ = "entity_name"

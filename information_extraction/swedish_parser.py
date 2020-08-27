@@ -358,7 +358,7 @@ def get_relations2(tree, sub_call=False):
     #if tree['dep_rel'] == 'START_DOC':
     #     print("Child")
     #     print_tree(tree)
-    print([','.join([merge_entities([e] + list(e.get('sub_info', {}).values())).get('token_name', 'NNN') for e in r]) for r in rel])
+    # print([','.join([merge_entities([e] + list(e.get('sub_info', {}).values())).get('token_name', 'NNN') for e in r]) for r in rel])
     all_relations = sub_rels + rel
     if sub_call is False:
         all_relations = split_relations(all_relations)

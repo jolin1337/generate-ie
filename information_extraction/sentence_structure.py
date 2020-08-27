@@ -14,7 +14,7 @@ class StanfordCoreNLPEx(StanfordCoreNLP):
     #            for i, entity in enumerate(self.ner_model([sentence])[1][0])]
 
     def word_tokenize(self, sentence, words=False, span=False):
-        r_dict = self._request(self.url, 'ssplit,tokenize', sentence)
+        r_dict = self._request('ssplit,tokenize', sentence)
         tokens = ([token['index']
                    for s in r_dict['sentences']
                    for token in s['tokens']],)
@@ -39,7 +39,7 @@ class StanfordCoreNLPEx(StanfordCoreNLP):
             return tokens
 
     def parse(self, sentence):
-        r_dict = self._request(self.url, 'pos,parse', sentence)
+        r_dict = self._request('pos,parse', sentence)
         return [s['parse'] for s in r_dict['sentences']]
 
     def _check_args(self):
@@ -51,9 +51,10 @@ class StanfordCoreNLPEx(StanfordCoreNLP):
 def get_sentence_tree(nlp, sentence, use_alias=False):
     """ Parse stanford corenlp api dependency tree """
     tokens, token_names = nlp.word_tokenize(sentence, words=True)
-    _, entities = zip(*nlp.ner(sentence)) # (0,['O'] * len(tokens)) #
-    print("Entityies", entities)
+    _, entities = (0,['O'] * len(tokens))
     if use_alias:
+        _, entities = zip(*nlp.ner(sentence))
+        print("Entityies", entities)
         alias_entity_bank = {
             'LOCATION': 'Stockholm',
             'B-LOCATION': 'Stockholm',
@@ -87,7 +88,7 @@ def get_sentence_tree(nlp, sentence, use_alias=False):
         token_names = real_sentence
         entities = alias_entities
         sentence = ' '.join(alias_sentence)
-    print("Parsed sentence", sentence)
+    # print("Parsed sentence", sentence)
     tree = nlp.dependency_parse(sentence)
     pos_tags = nlp.pos_tag(sentence)
     dep_tree = []

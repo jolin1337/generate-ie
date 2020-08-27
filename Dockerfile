@@ -1,11 +1,9 @@
-FROM alpine:3.7
-MAINTAINER <johannes.linden@miun.se>
-FROM python:3.7
+FROM jolin1337/base-environment:v1.0
 
 COPY requirements.txt /tmp
 WORKDIR /tmp
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+RUN pip3 install --upgrade pip && \
+    pip3 install -r requirements.txt
 
-WORKDIR /app
+WORKDIR /home/dev/workspace/stanford-corenlp
 CMD python --version
