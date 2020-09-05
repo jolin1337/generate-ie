@@ -10,15 +10,19 @@ from py2neo.ogm import GraphObject, Property, RelatedTo
 from information_extraction.sentence_structure import StanfordCoreNLPEx, get_sentence_tree
 from information_extraction.triple_evaluators import Metrics
 
-from jnius import autoclass
+try:
+    from jnius import autoclass
 
-CoreNLPUtils = autoclass('de.uni_mannheim.utils.coreNLP.CoreNLPUtils')
-#AnnotatedProposition = autoclass('de.uni_mannheim.minie.annotation.AnnotatedProposition')
-MinIE = autoclass('de.uni_mannheim.minie.MinIE')
-StanfordCoreNLP = autoclass('edu.stanford.nlp.pipeline.StanfordCoreNLP')
-String = autoclass('java.lang.String')
-Properties = autoclass('java.util.Properties')
-parser = CoreNLPUtils.StanfordDepNNParser()
+    CoreNLPUtils = autoclass('de.uni_mannheim.utils.coreNLP.CoreNLPUtils')
+    #AnnotatedProposition = autoclass('de.uni_mannheim.minie.annotation.AnnotatedProposition')
+    MinIE = autoclass('de.uni_mannheim.minie.MinIE')
+    StanfordCoreNLP = autoclass('edu.stanford.nlp.pipeline.StanfordCoreNLP')
+    String = autoclass('java.lang.String')
+    Properties = autoclass('java.util.Properties')
+    parser = CoreNLPUtils.StanfordDepNNParser()
+except:
+    print("Warning: Java was not found!!")
+    parser = None
 
 def get_nlp_connection(url=None, memory='2g', port=8001, print_startuptime=True):
     """ Open up a connection to stanford corenlp api """
