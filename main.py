@@ -9,20 +9,9 @@ from py2neo import Graph, Node, Relationship
 from py2neo.ogm import GraphObject, Property, RelatedTo
 from information_extraction.sentence_structure import StanfordCoreNLPEx, get_sentence_tree
 from information_extraction.triple_evaluators import Metrics
+from maltparser import MaltParserEx
 
-try:
-    from jnius import autoclass
-
-    CoreNLPUtils = autoclass('de.uni_mannheim.utils.coreNLP.CoreNLPUtils')
-    #AnnotatedProposition = autoclass('de.uni_mannheim.minie.annotation.AnnotatedProposition')
-    MinIE = autoclass('de.uni_mannheim.minie.MinIE')
-    StanfordCoreNLP = autoclass('edu.stanford.nlp.pipeline.StanfordCoreNLP')
-    String = autoclass('java.lang.String')
-    Properties = autoclass('java.util.Properties')
-    parser = CoreNLPUtils.StanfordDepNNParser()
-except:
-    print("Warning: Java was not found!!")
-    parser = None
+import minie
 
 def get_nlp_connection(url=None, memory='2g', port=8001, print_startuptime=True):
     """ Open up a connection to stanford corenlp api """
@@ -69,7 +58,7 @@ def load_data(dataset, max_samples=100):
 
 def parse_relations(nlp, sentence, lang='swe', use_openie=False, use_minie=False, debug=False):
     #if lang == 'swe':
-    from information_extraction.swedish_parser import get_relations
+    import information_extraction.swedish_parser as ie_parser
     #else:
     #    from information_extraction.english_parser import get_relations
     relations = []
@@ -79,50 +68,55 @@ def parse_relations(nlp, sentence, lang='swe', use_openie=False, use_minie=False
         for sent_tree in tree:
             print_tree(sent_tree[-1])
     set_language(lang)
-    generateie = list(get_relations(nlp, sentence))
-    #generateie = [triple for s in tree for triple in get_relations(s[-1], lang=lang)[1]]
+    generateie = list(ie_parser.get_relations(nlp, sentence))
+    #generateie = [triple for s in tree for triple in ie_parser.get_relations(s[-1], lang=lang)[1]]
     relations += list(zip(['generateie'] * len(generateie), generateie))
     if use_openie:
         openie = [triple for s in nlp._request('openie', sentence)['sentences'] for triple in s['openie']]
         relations += list(zip(['openie'] * len(openie), openie))
     if use_minie:
-        model = MinIE(String(sentence), parser, 2)
-        model.getPropositions().elements()
-        triple_names = ['subject', 'relation', 'object']
-        minie = [
-            {
-                triple_names[i]: val.toString() if val is not None else None
-                for i, val in enumerate(ap.getTriple().elements())
-                if i < 3
-            } for ap in model.getPropositions().elements()
-            if ap is not None
-        ]
-        minie = [triple for triple in minie if all(triple.get(n, None) is not None for n in triple_names)]
-        relations += list(zip(['minie'] * len(openie), minie))
+        triples = minie.get_relations(sentence)
+        relations += list(zip(['minie'] * len(triples), triples))
     print("parse sentences...")
     for source, relation in relations:
         yield source, relation
 
+
+def collect_relations(source, relation, id, text, data=None):
+    row = {
+        'id': id,
+        'source': source,
+        'subject': relation['subject'],
+        'relation': relation['relation'],
+        'object': relation['object'],
+        'subjectSpan': f"{relation.get('subjectSpan', [-1, -1])[0]},{relation.get('subjectSpan', [-1, -1])[1]}",
+        'relationSpan': f"{relation.get('relationSpan', [-1, -1])[0]},{relation.get('relationSpan', [-1, -1])[1]}",
+        'objectSpan': f"{relation.get('objectSpan', [-1, -1])[0]},{relation.get('objectSpan', [-1, -1])[1]}",
+        'text': text
+    }
+    if data is not None:
+        if len(data) == 0:
+            data.append(list(row.keys()))
+        data.append(list(row.values()))
+    return row
+
 def evaluate_comparison(dataset, lang, **kwargs):
-    nlp = get_nlp_connection(url='http://corenlp', memory='16g', port=9000)
+    nlp = kwargs.get('nlp')
+    if nlp is None:
+        nlp = get_nlp_connection(url='http://corenlp', memory='16g', port=9000)
     all_texts_relations = []
     for i, text in enumerate(load_data(dataset, max_samples=100)):
         data = []
-        for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True, use_minie=True, debug=kwargs.get('debug')):
-            row = {
-                'id': text.get('qid', i),
-                'source': source,
-                'subject': relation['subject'],
-                'relation': relation['relation'],
-                'object': relation['object'],
-                'subjectSpan': f"{relation.get('subjectSpan', [-1, -1])[0]},{relation.get('subjectSpan', [-1, -1])[1]}",
-                'relationSpan': f"{relation.get('relationSpan', [-1, -1])[0]},{relation.get('relationSpan', [-1, -1])[1]}",
-                'objectSpan': f"{relation.get('objectSpan', [-1, -1])[0]},{relation.get('objectSpan', [-1, -1])[1]}",
-                'text': text['sentence']
-            }
-            if len(data) == 0:
-                data.append(list(row.keys()))
-            data.append(list(row.values()))
+        relations = parse_relations(
+            nlp,
+            text['sentence'],
+            lang,
+            use_openie=kwargs.get('use_openie', False),
+            use_minie=kwargs.get('use_minie', False),
+            debug=kwargs.get('debug')
+        )
+        for source, relation in relations:
+            collect_relations(source, relation, text.get('qid', i), text['sentence'], data=data)
             # print('{:40} <=> {:^40} <=> {:>40} :: {}'.format(
             #     relation['subject'].strip(),
             #     relation['relation'].strip(),
@@ -263,8 +257,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'method',
-        choices=['matches', 'comparison', 'upload_triples'],
-        help="matches or comparison")
+        choices=['matches', 'comparison', 'maltparser', 'upload_triples'],
+        help="What algorithm to run")
     parser.add_argument(
         '--dataset',
         default="data/example_{language}.csv",
@@ -274,6 +268,14 @@ def parse_args():
         '--language',
         default="swe",
         help="Three lettters of the language to process (swe or eng)")
+    parser.add_argument(
+        '--use_openie',
+        action="store_true",
+        help="Compute openie triples by adding this flagg")
+    parser.add_argument(
+        '--use_minie',
+        action="store_true",
+        help="Compute minie triples by adding this flagg")
     parser.add_argument(
         '--debug',
         action="store_true",
@@ -288,6 +290,7 @@ if __name__ == '__main__':
     methods = {
         'matches': evaluate_matches,
         'comparison': evaluate_comparison,
+        'maltparser': lambda **kwargs: evaluate_comparison(nlp=MaltParserEx(), **kwargs),
         'upload_triples': upload_triples
     }
     method = methods.get(args.method, None)

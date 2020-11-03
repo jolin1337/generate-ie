@@ -36,12 +36,33 @@ services:
       - './models:/app/models'
       - './data:/app/data'
 
+  minie:
+    build: minie
+    command: mvn clean compile assembly:assembly -DdescriptorId=jar-with-dependencies
+    volumes:
+      - minie:/opt/minie
+
+  maltparser:
+    build: maltparser
+    volumes:
+      - maltparser:/opt/maltparser
+
   information-extraction:
     build: .
-    command: python main.py matches --dataset data/movie_dataset/summary-en.csv --language eng
+    command: bash -c "python3 main.py matches --dataset data/movie_dataset/summary-en.csv --language eng"
+    environment:
+      CLASSPATH: /home/dev/minie/target/minie-0.0.1-SNAPSHOT.jar
     volumes:
       - /home/johlin/.history:/home/dev/.history
       - /home/johlin/.zsh_history:/home/dev/.zsh_history:rw
       - ./:/home/dev/workspace/stanford-corenlp
+      - minie:/home/dev/workspace/minie
+      - maltparser:/home/dev/workspace/maltparser
     depends_on:
       - corenlp
+      - minie
+      - maltparser
+
+volumes:
+  minie:
+  maltparser:

@@ -93,19 +93,19 @@ def get_sentence_tree(nlp, sentence, use_alias=False):
     pos_tags = nlp.pos_tag(sentence)
     dep_tree = []
     for i, node in enumerate(tree):
-        passed_roots = [j for j, t in enumerate(tree) if t[0] == 'ROOT' and j <= i]
+        passed_roots = [j for j, t in enumerate(tree) if t[0].upper() == 'ROOT' and j <= i]
         sentence_offset = max(passed_roots)
         name = token_names[tokens.index(node[2], sentence_offset)] if node[2] > 0 else '_'
         node_dict = {
             'dep_rel': node[0],
-            'token': tokens.index(node[2], sentence_offset) if name != 'ROOT' else 0,
+            'token': tokens.index(node[2], sentence_offset) if name.upper() != 'ROOT' else 0,
             'parent_token': tokens.index(node[1], sentence_offset) if node[1] > 0 else -1,
             'pos': pos_tags[tokens.index(node[2], sentence_offset)][1],
             'token_name': name,
             'entity': entities[tokens.index(node[2], sentence_offset)],
             'children': []
         }
-        if node_dict['dep_rel'] == 'ROOT':
+        if node_dict['dep_rel'].upper() == 'ROOT':
             dep_tree.append(defaultdict(lambda: defaultdict(list)))
             dep_tree[-1][-1] = {
                 'children': [],

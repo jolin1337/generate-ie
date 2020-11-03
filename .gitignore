@@ -12,3 +12,4 @@ results/
 stanford-corenlp-full*
 stanford-corenlp-src/
 stopwords.txt
+maltparser-1.7.2/

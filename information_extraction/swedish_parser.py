@@ -271,6 +271,7 @@ def get_sentence_relations(tree, pos_tags):
                             break
                     if triple_obj not in triples:
                         triples.append(triple_obj)
+    #print("Triples:", [f'{triple["subject"],triple["relation"],triple["object"]}' for triple in triples])
     return triples
 
 
@@ -290,7 +291,7 @@ def get_relations(nlp, sentence, sub_call=False):
     pos_tags = nlp.pos_tag(sentence)
     print("Parsed sentence", sentence)
     tree = nlp.dependency_parse(sentence)
-    splits = [idx for idx, dep in enumerate(tree) if dep[rel_idx] == 'ROOT'] + [len(tree)]# or dep[rel_idx] == 'parataxis'] + [len(tree)]
+    splits = [idx for idx, dep in enumerate(tree) if dep[rel_idx].upper() == 'ROOT'] + [len(tree)]# or dep[rel_idx] == 'parataxis'] + [len(tree)]
     sentences = [tree[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
     pos_sentences = [pos_tags[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
 
@@ -354,7 +355,7 @@ def get_relations2(tree, sub_call=False):
     #        # rel[0].append(closest_subj)
     #        add_entity(relations=rel, entity=closest_subj)
     from information_extraction.parser import print_tree, merge_entities
-    # if tree['dep_rel'] == 'ROOT':
+    # if tree['dep_rel'].upper() == 'ROOT':
     #if tree['dep_rel'] == 'START_DOC':
     #     print("Child")
     #     print_tree(tree)
