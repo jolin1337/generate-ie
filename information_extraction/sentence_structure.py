@@ -42,6 +42,26 @@ class StanfordCoreNLPEx(StanfordCoreNLP):
         r_dict = self._request('pos,parse', sentence)
         return [s['parse'] for s in r_dict['sentences']]
 
+    def corefs(self, sentence):
+        r_dict = self._request('ssplit,tokenize,coref', sentence)
+        tokens = [[(token['index'], token['originalText'])
+                   for token in s['tokens']]
+                   for s in r_dict['sentences']]
+
+        for sent_idx, sent_tokens in enumerate(tokens):
+            sentNum = sent_idx + 1
+            for index, word in sent_tokens:
+                coref = None
+                for s in r_dict['corefs'].values():
+                    for ref in s:
+                        if ref['headIndex'] == index and ref['sentNum'] == sentNum and ref['isRepresentativeMention'] is False:
+                            repr_ref = [r for r in s if r['isRepresentativeMention'] is True][0]
+                            coref = {
+                                'refWord': tokens[repr_ref['sentNum']-1][repr_ref['headIndex']-1][1],
+                                **ref
+                            }
+                yield index, coref, word
+
     def _check_args(self):
         self._check_language(self.lang)
         if not re.match('\\d+g', self.memory):
@@ -54,7 +74,7 @@ def get_sentence_tree(nlp, sentence, use_alias=False):
     _, entities = (0,['O'] * len(tokens))
     if use_alias:
         _, entities = zip(*nlp.ner(sentence))
-        print("Entityies", entities)
+        #print("Entityies", entities)
         alias_entity_bank = {
             'LOCATION': 'Stockholm',
             'B-LOCATION': 'Stockholm',

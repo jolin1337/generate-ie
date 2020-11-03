@@ -4,3 +4,5 @@ py2neo
 psycopg2-binary
 beautifulsoup4
 pyjnius
+tqdm
+matplotlib_venn

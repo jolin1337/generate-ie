@@ -1,16 +1,22 @@
 """ Information extraction on sample sentences """
-import time
-import pandas
-from information_extraction.part_of_speech import set_language
-from information_extraction.parser import print_tree
-import csv
 import collections
+import csv
+import time
+
+import pandas
 from py2neo import Graph, Node, Relationship
 from py2neo.ogm import GraphObject, Property, RelatedTo
-from information_extraction.sentence_structure import StanfordCoreNLPEx, get_sentence_tree
+from tqdm import tqdm
+
+from information_extraction.parser import print_tree
+from information_extraction.part_of_speech import set_language
+from information_extraction.sentence_structure import (StanfordCoreNLPEx,
+                                                       get_sentence_tree)
 from information_extraction.triple_evaluators import Metrics
 
 try:
+    import os
+    os.environ['CLASSPATH'] = 'miniepy/jar/*'
     from jnius import autoclass
 
     CoreNLPUtils = autoclass('de.uni_mannheim.utils.coreNLP.CoreNLPUtils')
@@ -43,15 +49,12 @@ def get_nlp_connection(url=None, memory='2g', port=8001, print_startuptime=True)
 def load_data(dataset, max_samples=100):
     print("Loading dataset...")
     texts = pandas.read_csv(dataset, header=0)
-    # texts = pandas.read_csv('data/example_swe.csv', header=0)
-    # texts = pandas.read_csv('data/movie_dataset/summary-sv.csv', header=0)
     if max_samples <= 0:
         max_samples = len(texts)
-    texts = texts.sample(n=min(max_samples, len(texts)), random_state=0)
+    sample_count = min(max_samples, len(texts))
+    texts = texts.head(sample_count) #.sample(n=sample_count, random_state=0)
     print(texts)
     texts = texts.iterrows()
-    # texts = load_data('data/example_eng.csv', start=0, end=600).iterrows()
-    #texts = load_data('data/example_swe.csv', start=0, end=600).iterrows()
     for _, text in texts:
         summary = text['summary']
         if summary.strip()[0] == '#':
@@ -70,23 +73,29 @@ def load_data(dataset, max_samples=100):
 def parse_relations(nlp, sentence, lang='swe', use_openie=False, use_minie=False, debug=False):
     #if lang == 'swe':
     from information_extraction.swedish_parser import get_relations
+
     #else:
     #    from information_extraction.english_parser import get_relations
+
+    corefs = list(nlp.corefs(sentence))
+    splits = [idx for idx, ref in enumerate(corefs) if ref[0] == 1] + [len(corefs)]
+    corefs_list = [corefs[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
+    coref_sentence = ''.join(' '.join(token[2] if token[1] is None else token[1]['refWord'] for token in ref) for ref in corefs_list)
     relations = []
-    tree = get_sentence_tree(nlp, sentence)
+    tree = get_sentence_tree(nlp, coref_sentence)
     if debug:
-        print("Dependency tree for", "'{sentence}'".format(sentence=sentence))
+        print(f"Dependency tree for '{coref_sentence}'")
         for sent_tree in tree:
             print_tree(sent_tree[-1])
     set_language(lang)
-    generateie = list(get_relations(nlp, sentence))
+    generateie = list(get_relations(nlp, coref_sentence))
     #generateie = [triple for s in tree for triple in get_relations(s[-1], lang=lang)[1]]
     relations += list(zip(['generateie'] * len(generateie), generateie))
     if use_openie:
-        openie = [triple for s in nlp._request('openie', sentence)['sentences'] for triple in s['openie']]
+        openie = [triple for s in nlp._request('openie', coref_sentence)['sentences'] for triple in s['openie']]
         relations += list(zip(['openie'] * len(openie), openie))
     if use_minie:
-        model = MinIE(String(sentence), parser, 2)
+        model = MinIE(String(coref_sentence), parser, 2)
         model.getPropositions().elements()
         triple_names = ['subject', 'relation', 'object']
         minie = [
@@ -99,14 +108,15 @@ def parse_relations(nlp, sentence, lang='swe', use_openie=False, use_minie=False
         ]
         minie = [triple for triple in minie if all(triple.get(n, None) is not None for n in triple_names)]
         relations += list(zip(['minie'] * len(openie), minie))
-    print("parse sentences...")
+    if debug:
+        print("parse sentences...")
     for source, relation in relations:
         yield source, relation
 
 def evaluate_comparison(dataset, lang, **kwargs):
     nlp = get_nlp_connection(url='http://corenlp', memory='16g', port=9000)
     all_texts_relations = []
-    for i, text in enumerate(load_data(dataset, max_samples=100)):
+    for i, text in tqdm(enumerate(load_data(dataset, max_samples=100)), total=100):
         data = []
         for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True, use_minie=True, debug=kwargs.get('debug')):
             row = {
@@ -128,20 +138,21 @@ def evaluate_comparison(dataset, lang, **kwargs):
             #     relation['relation'].strip(),
             #     relation['object'].strip(),
             #     summary[:100]))
-        if data:
-            with pandas.option_context('display.max_rows', None, 'display.max_columns', None):
-                resulting_pandas = pandas.DataFrame(
-                                        data=data[1:],
-                                        columns=data[0])
-                resulting_pandas.to_csv('results/comparisions/{lang}_{ID}.csv'.format(lang=lang, ID=text.get('qid', i)), sep='\t', encoding='utf-8')
-                # print("Sentence:", text.get('qid', i))
-                print(resulting_pandas)
-            if len(all_texts_relations) == 0:
-                all_texts_relations.append(data[0])
-            all_texts_relations += data[1:]
-        else:
-            print("No relations found for", text['sentence'])
-        print()
+        if kwargs.get('debug'):
+            if data:
+                with pandas.option_context('display.max_rows', None, 'display.max_columns', None):
+                    resulting_pandas = pandas.DataFrame(
+                                            data=data[1:],
+                                            columns=data[0])
+                    resulting_pandas.to_csv('results/comparisions/{lang}_{ID}.csv'.format(lang=lang, ID=text.get('qid', i)), sep='\t', encoding='utf-8')
+                    # print("Sentence:", text.get('qid', i))
+                    print(resulting_pandas)
+                if len(all_texts_relations) == 0:
+                    all_texts_relations.append(data[0])
+                all_texts_relations += data[1:]
+            else:
+                print("No relations found for", text['sentence'])
+            print()
     resulting_pandas = pandas.DataFrame(
                             data=all_texts_relations[1:],
                             columns=all_texts_relations[0])
@@ -160,7 +171,7 @@ def evaluate_matches(dataset, lang, **kwargs):
         }
         for model_name in ['openie', 'generateie', 'minie']
     }
-    match_counters = [(m, Metrics()) for m in ie_models.keys() if m != 'generateie']
+    match_counters = [(m, Metrics()) for m in ie_models.keys()]
     triples = open('results/triples_life_' + lang + '.csv', 'w')
     triples_csv = csv.writer(triples, quoting=csv.QUOTE_NONNUMERIC)
     relations = open('results/relations_life_' + lang + '.csv', 'w')
@@ -169,33 +180,36 @@ def evaluate_matches(dataset, lang, **kwargs):
     entities_csv = csv.writer(entities, quoting=csv.QUOTE_NONNUMERIC)
     row_columns = [
         *[model + metric for model in ie_models.keys() for metric in [' avg', ' count', ' total']],
-        *['match ' + model + metric for model in ie_models.keys() for metric in [' avg', ' count', ' total'] if model != 'generateie']
+        *['match ' + model + metric for model in ie_models.keys() for metric in [' avg', ' count', ' total']]
     ]
     entities_csv.writerow(row_columns)
     relations_csv.writerow(row_columns)
     triples_csv.writerow(row_columns)
-    for i, text in enumerate(load_data(dataset, max_samples=10000)):
-        for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True, use_minie=True):
+    for i, text in tqdm(enumerate(load_data(dataset, max_samples=10000)), total=10000):
+        for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True, use_minie=True, debug=kwargs.get('debug')):
             ie_models[source]['rels'].append(relation)
             ie_models[source]['metrics'].count(relation)
-        for match_model, match_counter in match_counters:
-            match_counter.count_if(
-                    ie_models[match_model]['rels'],
-                    ie_models[source]['rels'],
-                    lambda o1, o2, t: o1[t] == o2[t] or o2[t] == o1[t])
-                    #lambda o1, o2, t: o1[t + 'Span'] in o2[t + 'Span'])
+        for source in ie_models.keys():
+            for match_model, match_counter in match_counters:
+                if match_model != source:
+                    match_counter.count_if(
+                            ie_models[match_model]['rels'],
+                            ie_models[source]['rels'],
+                            lambda o1, o2, t: o1[t] == o2[t] or o2[t] == o1[t])
+                            #lambda o1, o2, t: o1[t + 'Span'] in o2[t + 'Span'])
         row = [
             *[getattr(model['metrics'], metric)() for model in ie_models.values() for metric in ['get_avg', 'get_count', 'get_total']],
-            *[getattr(model['metrics'], metric)() for model in ie_models.values() for metric in ['get_avg', 'get_count', 'get_total'] if model['name'] != 'generateie']
+            *[getattr(model['metrics'], metric)() for model in ie_models.values() for metric in ['get_avg', 'get_count', 'get_total']]
         ]
         entities_csv.writerow([c['entity'] for c in row])
         relations_csv.writerow([c['relation'] for c in row])
         triples_csv.writerow([c['relation'] for c in row])
-        for name, val in zip(row_columns, row):
-            print(name + ":", val)
+        if kwargs.get('debug'):
+            for name, val in zip(row_columns, row):
+                print(name + ":", val)
 
         if i % 100 == 0:
-            print("Saving data...")
+            #print("Saving data...")
             import pickle
             for model in ie_models.values():
                 with open(f'results/{model["name"]}_{lang}.pkl', 'wb') as ie:
@@ -229,7 +243,7 @@ def upload_triples(dataset, lang, **kwargs):
     IS_LANG = Relationship.type("IS_LANGUAGE")
     graph.merge(dataset_node, "Dataset", "id")
     graph.merge(lang_node, "Language", "id")
-    for i, text in enumerate(load_data(dataset, max_samples=10000)):
+    for i, text in tqdm(enumerate(load_data(dataset, max_samples=10000)), total=10000):
         tx = graph.begin()
         article = Node("Article", id=i, sentence=text['sentence'])
         tx.merge(article, "Article", "id")

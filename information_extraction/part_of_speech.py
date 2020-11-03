@@ -18,7 +18,7 @@ def get_pos_tags(lang=None):
         return POS
     """ Load predefined pos tag mappings """
     with open('pos-tags.json', 'r') as pos_file:
-        print("Loading pos-tags ({})".format(lang))
+        #print("Loading pos-tags ({})".format(lang))
         pos_tags_file = json.load(pos_file)
         pos_tags = {c['key']: c['value'] for c in pos_tags_file[lang + '_pos']}
         POS = pos_tags

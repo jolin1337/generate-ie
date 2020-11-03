@@ -227,8 +227,8 @@ def get_sentence_relations(tree, pos_tags):
     relations = [(idx, dep) for idx, (dep, pos) in enumerate(zip(tree, token_pos)) if dep not in disabled and is_relation(dep, pos)]
     entities = [(idx, dep) for idx, (dep, pos) in enumerate(zip(tree, token_pos)) if dep not in disabled and is_entity(dep, pos)]
     triples = []
-    print("relations:",[token_words[r[0]] for r in relations])
-    print("entities:", [token_words[e[0]] for e in entities])
+    #print("relations:",[token_words[r[0]] for r in relations])
+    #print("entities:", [token_words[e[0]] for e in entities])
     for ridx, rel in relations:
         potential_entities = sorted(entities, key=lambda entity: abs(entity[0] - ridx))
         left_entities = []
@@ -288,13 +288,16 @@ def make_triple(triple, token_names):
 def get_relations(nlp, sentence, sub_call=False):
     rel_idx = 0
     pos_tags = nlp.pos_tag(sentence)
-    print("Parsed sentence", sentence)
+    #print("Parsed sentence", sentence)
     tree = nlp.dependency_parse(sentence)
+    corefs = list(nlp.corefs(sentence))
     splits = [idx for idx, dep in enumerate(tree) if dep[rel_idx] == 'ROOT'] + [len(tree)]# or dep[rel_idx] == 'parataxis'] + [len(tree)]
     sentences = [tree[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
     pos_sentences = [pos_tags[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
+    corefs_sentences = [corefs[splits[i]:splits[i+1]] for i in range(len(splits) - 1)]
 
-    for i, sent, pos in zip(range(len(sentences)), sentences, pos_sentences):
+    for i, sent, pos, coref in zip(range(len(sentences)), sentences, pos_sentences, corefs_sentences):
+        pos = [(p[0] if coref[i][1] is None else coref[i][1]['refWord'], p[1]) for i, p in enumerate(pos)]
         for triple in get_sentence_relations(sent, pos):
             if i > 0:
                 offset = sum(len(s) for s in pos_sentences[:i])

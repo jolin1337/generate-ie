@@ -12,3 +12,5 @@ results/
 stanford-corenlp-full*
 stanford-corenlp-src/
 stopwords.txt
+
+.vscode
