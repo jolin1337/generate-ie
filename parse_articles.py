@@ -60,64 +60,6 @@ def main(articles_file):
 
 
 if __name__ == '__main__':
-    #args = ['articles.csv']
-    #args[0] = sys.argv[1] or args[0]
-    #main(args[0])
-
-    import random
-    import math
-    import matplotlib.pyplot as plt
-    from matplotlib_venn import venn3
-    import pickle
-    with open('data/validation.csv') as val:
-        content = val.read()
-        sets = []
-        correct_sets = []
-        sources = ['openie', 'generateie', 'minie']
-        for source in ['all', *sources, 'overlap']:
-            if source == 'all':
-                vals = [1 if v.startswith('TRUE') else 0 for v in content.split('\n')[1:] if (v.startswith('TRUE') or v.startswith('n'))]
-            elif source == 'overlap':
-                openie_triples = [v.split('\t')[-1] for v in content.split('\n')[1:] if (v.startswith('TRUE') or v.startswith('n')) and v.split('\t')[1] == 'openie']
-                genie_triples = [v.split('\t')[-1] for v in content.split('\n')[1:] if (v.startswith('TRUE') or v.startswith('n')) and v.split('\t')[1] == 'generateie']
-                minie_triples = [v.split('\t')[-1] for v in content.split('\n')[1:] if (v.startswith('TRUE') or v.startswith('n')) and v.split('\t')[1] == 'minie']
-                vals = [1 if v.startswith('TRUE') else 0 for v in content.split('\n')[1:] if (v.startswith('TRUE') or v.startswith('n')) and v.split('\t')[-1] in openie_triples and v.split('\t')[-1] in genie_triples and v.split('\t')[-1] in minie_triples]
-                continue
-            else:
-                vals = [1 if v.startswith('TRUE') else 0 for v in content.split('\n')[1:] if (v.startswith('TRUE') or v.startswith('n')) and v.split('\t')[1] == source]
-                sets.append(set([v.split('\t')[-1] for v in content.split('\n')[1:] if (v.startswith('TRUE') or v.startswith('n')) and v.split('\t')[1] == source]))
-                correct_sets.append(set([v.split('\t')[-1] for v in content.split('\n')[1:] if v.startswith('TRUE') and v.split('\t')[1] == source]))
-            vals.sort(key=lambda x: random.random())
-            batches = 10
-            batch = int(len(vals)/batches)
-            scores = []
-            for x in range(batches):
-                current = vals[x*batch:(x+1)*batch]
-                score = sum(current) / len(current)
-                scores.append(score)
-            avg_score = sum(scores)/batches
-            print("%s count %s" % (source, len(vals)))
-            print("%s scores %s" % (source, scores))
-            print("%s avg score %s" % (source, avg_score))
-            variance = 0
-            for s in scores:
-                variance += (s - avg_score) ** 2
-            print("%s variance %s" % (source, variance/(batches-1)))
-            print("%s std %s" % (source, math.sqrt(variance/(batches-1))))
-            print()
-        # Make the diagrams
-        venn3(sets, set_labels=sources)
-        plt.savefig('results/venn3-ie-manual-triples.png')
-        plt.clf()
-        venn3(correct_sets, set_labels=sources)
-        plt.savefig('results/venn3-ie-manual-correct-triples.png')
-        plt.clf()
-
-        qsets = []
-        for source in sources:
-            with open(f'results/matchie_{source}_eng.pkl', 'rb') as ie:
-                counters = pickle.load(ie)
-                triples = set(counters.triple_counter.keys())
-                qsets.append(triples)
-        venn3(qsets, set_labels=sources)
-        plt.savefig('results/venn3-ie-quantitative.png')
+    args = ['articles.csv']
+    args[0] = sys.argv[1] or args[0]
+    main(args[0])

@@ -52,15 +52,19 @@ def load_data(dataset, max_samples=100):
     if max_samples <= 0:
         max_samples = len(texts)
     sample_count = min(max_samples, len(texts))
-    texts = texts.head(sample_count) #.sample(n=sample_count, random_state=0)
+    #texts = texts[~texts.summary.str.contains(":") & ~texts.summary.str.contains("#")].head(sample_count) #.sample(n=sample_count, random_state=0)
     print(texts)
     texts = texts.iterrows()
+    i = 0
     for _, text in texts:
         summary = text['summary']
         if summary.strip()[0] == '#':
             continue
         if '#' in summary or ':' in summary:
             continue
+        if i >= max_samples:
+            break
+        i+=1
         # print('_____________________________')
         # print(text.get('qid', i), ":", summary)
         # print('#---------------------------#')
@@ -96,7 +100,6 @@ def parse_relations(nlp, sentence, lang='swe', use_openie=False, use_minie=False
         relations += list(zip(['openie'] * len(openie), openie))
     if use_minie:
         model = MinIE(String(coref_sentence), parser, 2)
-        model.getPropositions().elements()
         triple_names = ['subject', 'relation', 'object']
         minie = [
             {
@@ -116,7 +119,7 @@ def parse_relations(nlp, sentence, lang='swe', use_openie=False, use_minie=False
 def evaluate_comparison(dataset, lang, **kwargs):
     nlp = get_nlp_connection(url='http://corenlp', memory='16g', port=9000)
     all_texts_relations = []
-    for i, text in tqdm(enumerate(load_data(dataset, max_samples=100)), total=100):
+    for i, text in tqdm(enumerate(load_data(dataset, max_samples=10000)), total=10000):
         data = []
         for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True, use_minie=True, debug=kwargs.get('debug')):
             row = {
@@ -138,26 +141,27 @@ def evaluate_comparison(dataset, lang, **kwargs):
             #     relation['relation'].strip(),
             #     relation['object'].strip(),
             #     summary[:100]))
-        if kwargs.get('debug'):
-            if data:
-                with pandas.option_context('display.max_rows', None, 'display.max_columns', None):
-                    resulting_pandas = pandas.DataFrame(
-                                            data=data[1:],
-                                            columns=data[0])
-                    resulting_pandas.to_csv('results/comparisions/{lang}_{ID}.csv'.format(lang=lang, ID=text.get('qid', i)), sep='\t', encoding='utf-8')
-                    # print("Sentence:", text.get('qid', i))
+        if data:
+            with pandas.option_context('display.max_rows', None, 'display.max_columns', None):
+                resulting_pandas = pandas.DataFrame(
+                                        data=data[1:],
+                                        columns=data[0])
+                resulting_pandas.to_csv(f'results/comparisions/{lang}_{text.get("qid", i)}.csv', sep='\t', encoding='utf-8', index_label="idx")
+                # print("Sentence:", text.get('qid', i))
+                if kwargs.get('debug'):
                     print(resulting_pandas)
-                if len(all_texts_relations) == 0:
-                    all_texts_relations.append(data[0])
-                all_texts_relations += data[1:]
-            else:
-                print("No relations found for", text['sentence'])
+                    print()
+            if len(all_texts_relations) == 0:
+                all_texts_relations.append(data[0])
+            all_texts_relations += data[1:]
+        elif kwargs.get('debug'):
+            print("No relations found for", text['sentence'])
             print()
     resulting_pandas = pandas.DataFrame(
                             data=all_texts_relations[1:],
                             columns=all_texts_relations[0])
-    resulting_pandas.to_html('results/comparisions_' + lang + '.html')
-    resulting_pandas.to_csv('results/comparisions_' + lang + '.csv', sep='\t', encoding='utf-8')
+    resulting_pandas.to_html(f'results/comparisions_{lang}.html')
+    resulting_pandas.to_csv(f'results/comparisions_{lang}.csv', sep='\t', encoding='utf-8', index_label="idx")
 
 
 def evaluate_matches(dataset, lang, **kwargs):
@@ -171,7 +175,7 @@ def evaluate_matches(dataset, lang, **kwargs):
         }
         for model_name in ['openie', 'generateie', 'minie']
     }
-    match_counters = [(m, Metrics()) for m in ie_models.keys()]
+    match_counters = [(m1, m2, Metrics()) for m1 in ie_models.keys() for m2 in ie_models.keys() if m1 != m2]
     triples = open('results/triples_life_' + lang + '.csv', 'w')
     triples_csv = csv.writer(triples, quoting=csv.QUOTE_NONNUMERIC)
     relations = open('results/relations_life_' + lang + '.csv', 'w')
@@ -180,26 +184,35 @@ def evaluate_matches(dataset, lang, **kwargs):
     entities_csv = csv.writer(entities, quoting=csv.QUOTE_NONNUMERIC)
     row_columns = [
         *[model + metric for model in ie_models.keys() for metric in [' avg', ' count', ' total']],
-        *['match ' + model + metric for model in ie_models.keys() for metric in [' avg', ' count', ' total']]
+        *[f'match {model1}/{model2} {metric}' for model1 in ie_models.keys() for model2 in ie_models.keys() for metric in [' avg', ' count', ' total'] if model1 != model2]
     ]
     entities_csv.writerow(row_columns)
     relations_csv.writerow(row_columns)
     triples_csv.writerow(row_columns)
     for i, text in tqdm(enumerate(load_data(dataset, max_samples=10000)), total=10000):
+        doc_relations = []
         for source, relation in parse_relations(nlp, text['sentence'], lang, use_openie=True, use_minie=True, debug=kwargs.get('debug')):
+            doc_relations.append((source, relation))
             ie_models[source]['rels'].append(relation)
             ie_models[source]['metrics'].count(relation)
-        for source in ie_models.keys():
-            for match_model, match_counter in match_counters:
-                if match_model != source:
-                    match_counter.count_if(
-                            ie_models[match_model]['rels'],
-                            ie_models[source]['rels'],
-                            lambda o1, o2, t: o1[t] == o2[t] or o2[t] == o1[t])
-                            #lambda o1, o2, t: o1[t + 'Span'] in o2[t + 'Span'])
+        for source, relation in doc_relations:
+            for m1, m2, model in match_counters:
+                model.count_if(
+                    [relation],
+                    ie_models[source]['rels'],
+                    lambda o1, o2, t: o1[t] == o2[t] and m1 == source
+                )
+
+        #for match_model1, match_model2, match_counter in match_counters:
+        #    match_counter.count_if(
+        #            ie_models[match_model1]['rels'],
+        #            ie_models[match_model2]['rels'],
+        #            lambda o1, o2, t: o1[t] == o2[t] or o2[t] == o1[t])
+        #            #lambda o1, o2, t: o1[t + 'Span'] in o2[t + 'Span'])
+
         row = [
             *[getattr(model['metrics'], metric)() for model in ie_models.values() for metric in ['get_avg', 'get_count', 'get_total']],
-            *[getattr(model['metrics'], metric)() for model in ie_models.values() for metric in ['get_avg', 'get_count', 'get_total']]
+            *[getattr(model, metric)() for model1, model2, model in match_counters for metric in ['get_avg', 'get_count', 'get_total']]
         ]
         entities_csv.writerow([c['entity'] for c in row])
         relations_csv.writerow([c['relation'] for c in row])
@@ -208,14 +221,14 @@ def evaluate_matches(dataset, lang, **kwargs):
             for name, val in zip(row_columns, row):
                 print(name + ":", val)
 
-        if i % 100 == 0:
+        if i % 100 == 0 and i > 0:
             #print("Saving data...")
             import pickle
             for model in ie_models.values():
                 with open(f'results/{model["name"]}_{lang}.pkl', 'wb') as ie:
                     pickle.dump(model['metrics'], ie)
-            for match_model, match_counter in match_counters:
-                with open(f'results/matchie_{match_model}_{lang}.pkl', 'wb') as ie:
+            for m1, m2, match_counter in match_counters:
+                with open(f'results/matchie_{m1}_{m2}_{lang}.pkl', 'wb') as ie:
                     pickle.dump(match_counter, ie)
 
 class Entity(GraphObject):
